@@ -41,26 +41,36 @@ pub async fn get_geotz_data(client: &Client, geo: Geo, date_opt: Option<&str>) -
   None   
 }
 
-pub async fn get_tz_data(geo: Geo, date_opt: Option<&str>) -> Option<TzRow> {
+pub async fn get_tz_data(geo_opt: Option<Geo>, zn_opt: Option<&str>, date_opt: Option<&str>) -> Option<TzRow> {
   let client = reqwest::Client::new();
-  let loc = geo.to_string();
+  let opt_str = if let Some(geo) = geo_opt {
+    geo.to_string()
+  } else if let Some(zn) = zn_opt {
+    zn.to_string()
+  } else {
+    "".to_string()
+  };
+  let opt_key = if geo_opt.is_some() { "loc" } else { "zn" };
   let mut query_params = vec![
-    ("loc", loc.as_str()),
+    (opt_key, opt_str.as_str()),
   ];
+  let valid = geo_opt.is_some() | (opt_str.len() > 3 && opt_str.contains("/"));
   if date_opt.is_some() {
     query_params.push(("dt", date_opt.unwrap_or("")));
   }
-  let uri = format!("{}/timezone", get_gtz_url());
-  let result = client.get(&uri)
-    .query(&query_params).send()
-    .await
-    .expect("failed to get response")
-    .text()
-    .await;
-  if let Ok(result_string) = result {
-    let data: Map<String, Value> = serde_json::from_str(&result_string).unwrap();
-    if data.contains_key("abbreviation") {
-      return Some(TzRow::new(&data));
+  if valid {
+    let uri = format!("{}/timezone", get_gtz_url());
+    let result = client.get(&uri)
+      .query(&query_params).send()
+      .await
+      .expect("failed to get response")
+      .text()
+      .await;
+    if let Ok(result_string) = result {
+      let data: Map<String, Value> = serde_json::from_str(&result_string).unwrap();
+      if data.contains_key("abbreviation") {
+        return Some(TzRow::new(&data));
+      }
     }
   }
   None   

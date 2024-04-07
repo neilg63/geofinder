@@ -21,7 +21,7 @@ pub async fn get_nearest_pcs(extract::State(client): extract::State<Client>, que
     if rows.len() < 1 {
       rows = fetch_pcs(&client, geo, km, limit).await;
       if rows.len() > 0 {
-        redis_set_pc_results(&ck, &rows);
+        let st = redis_set_pc_results(&ck, &rows);
       }
     } else {
       cached = true;
@@ -50,7 +50,10 @@ pub async fn get_gtz(extract::State(client): extract::State<Client>, query: extr
     let mut data: Option<GeoTimeInfo> = None;
     let geo_data = redis_get_geo_nearby(&ck);
     if let Some(gdata) = geo_data {
-      let time_opt =  get_tz_data(geo, dt_opt.clone().as_deref()).await;
+      let has_zn = gdata.zone_name.is_some();
+      let zn_opt = if has_zn { gdata.zone_name.as_deref() } else { None };
+      let geo_opt = if has_zn { None } else { Some(geo) };
+      let time_opt =  get_tz_data(geo_opt, zn_opt, dt_opt.clone().as_deref()).await;
       if let Some(time) = time_opt {
         let mut info = GeoTimeInfo::new(gdata, time);
         info.set_cached();

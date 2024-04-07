@@ -1,7 +1,7 @@
 
-use redis::{Commands, RedisResult, Connection};
+use redis::{streams::StreamPendingCountReply, Commands, Connection, RedisResult};
 
-use crate::models::{GeoNearby, PcRow, TzRow};
+use crate::{models::{GeoNearby, PcRow, TzRow}, store};
 
 pub(crate) fn redis_client() -> RedisResult<Connection> {
   let client = redis::Client::open("redis://127.0.0.1/")?;
@@ -21,7 +21,8 @@ pub(crate) fn redis_set_pc_results(key: &str, data: &Vec<PcRow>) -> bool {
   if let Ok(mut connection) =  redis_client() {
       let stored_data: Vec<PcRow> = data.to_owned();
       if let Ok(value) = serde_json::to_string(&stored_data) {
-          if let Ok(_result) = connection.set::<String,String,String>(key.to_string(), value) {
+        let store_result = connection.set::<String,String,String>(key.to_string(), value);
+          if let Ok(_result) = store_result {
               true
           } else {
               false
