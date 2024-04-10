@@ -11,6 +11,7 @@ mod fetchers;
 mod common;
 mod store;
 mod geotime;
+mod addresses;
 
 mod handlers;
 
@@ -37,7 +38,7 @@ use tower_http::{
     cors::CorsLayer
 };
 use crate::common::{welcome, handler_404};
-use crate::handlers::{get_nearest_pcs,get_gtz};
+use crate::handlers::{get_nearest_pcs,get_gtz,fetch_and_update_addresses};
 use crate::db::*;
 // use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -61,6 +62,7 @@ async fn main() {
         .route("/", get(welcome))
         .route("/postcodes", get(get_nearest_pcs))
         .route("/gtz", get(get_gtz))
+        .route("/addresses", post(fetch_and_update_addresses))
         .layer(CorsLayer::permissive())
         // timeout requests after 10 secs, returning 408 status code
         .layer(TimeoutLayer::new(Duration::from_secs(10)))

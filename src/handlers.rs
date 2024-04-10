@@ -6,9 +6,8 @@ use axum::{
 };
 use mongodb::Client;
 use serde_json::json;
-use string_patterns::PatternMatch;
 
-use crate::{common::{build_store_key_from_geo, GeoParams}, fetchers::fetch_pcs, geotime::{get_geotz_data, get_tz_data}, models::GeoTimeInfo, store::{redis_get_geo_nearby, redis_get_pc_results, redis_set_geo_nearby, redis_set_pc_results}};
+use crate::{addresses::get_remote_addresses, common::{build_store_key_from_geo, is_valid_date_string, GeoParams, PostParams}, fetchers::{fetch_pc_zone, fetch_pcs, update_pc_addresses}, geotime::{get_geotz_data, get_tz_data}, models::GeoTimeInfo, store::{redis_get_geo_nearby, redis_get_pc_results, redis_set_geo_nearby, redis_set_pc_results}};
 
 
 pub async fn get_nearest_pcs(extract::State(client): extract::State<Client>, query: extract::Query<GeoParams>) -> impl IntoResponse {
@@ -21,7 +20,7 @@ pub async fn get_nearest_pcs(extract::State(client): extract::State<Client>, que
     if rows.len() < 1 {
       rows = fetch_pcs(&client, geo, km, limit).await;
       if rows.len() > 0 {
-        let st = redis_set_pc_results(&ck, &rows);
+        redis_set_pc_results(&ck, &rows);
       }
     } else {
       cached = true;
@@ -35,14 +34,13 @@ pub async fn get_nearest_pcs(extract::State(client): extract::State<Client>, que
 }
 
 
-
 pub async fn get_gtz(extract::State(client): extract::State<Client>, query: extract::Query<GeoParams>) -> impl IntoResponse {
   if let Some(geo) = query.to_geo_opt() {
     let mut dt_opt: Option<String> = None;
      // Clone query.dt outside the inner if let block
      let dt = query.dt.clone();
      if let Some(ds) = dt {
-         if ds.pattern_match_cs(r#"^\d\d\d\d-[01]\d-[0-3]\d"#) {
+         if is_valid_date_string(&ds) {
              dt_opt = Some(ds); // Assign ds directly, not as a reference
          }
     }
@@ -52,7 +50,7 @@ pub async fn get_gtz(extract::State(client): extract::State<Client>, query: extr
     if let Some(gdata) = geo_data {
       let has_zn = gdata.zone_name.is_some();
       let zn_opt = if has_zn { gdata.zone_name.as_deref() } else { None };
-      let geo_opt = if has_zn { None } else { Some(geo) };
+      let geo_opt = Some(geo);
       let time_opt =  get_tz_data(geo_opt, zn_opt, dt_opt.clone().as_deref()).await;
       if let Some(time) = time_opt {
         let mut info = GeoTimeInfo::new(gdata, time);
@@ -78,4 +76,24 @@ pub async fn get_gtz(extract::State(client): extract::State<Client>, query: extr
     let response = json!({ "valid": false });
     (StatusCode::NOT_ACCEPTABLE, Json(response))
   }
+}
+
+
+pub async fn fetch_and_update_addresses(extract::State(client): extract::State<Client>, query: extract::Json<PostParams>) -> impl IntoResponse {
+  if let Some(pc) = query.pc.clone() {
+    let pc_zone_opt = fetch_pc_zone(&client, &pc).await;
+    if let Some(mut pc_zone) = pc_zone_opt {
+      if !pc_zone.has_addresses() {
+        let addresses_opt = get_remote_addresses(&pc).await;
+        if let Some(addresses) = addresses_opt {
+          update_pc_addresses(&client, &pc, &addresses).await;
+          pc_zone.add_addresses(&addresses);
+        }
+      }
+      let response = json!(pc_zone);
+      return (StatusCode::OK, Json(response));
+    } 
+  }
+  let response = json!({ "valid": false });
+  (StatusCode::NOT_ACCEPTABLE, Json(response))
 }

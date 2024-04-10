@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::*;
 use bson::{doc, Document};
+use crate::common::natural_tz_offset_from_utc;
 use crate::extractors::*;
 use crate::bson_extractors::*;
 
@@ -221,6 +222,10 @@ impl TzRow {
       zone_name
     }
   }
+
+  pub fn calc_solar_offset(&mut self, lng: f64) {
+    self.solar_utc_offset = natural_tz_offset_from_utc(lng);
+  }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -281,6 +286,82 @@ impl GeoTimeInfo {
 
   pub fn set_time(&mut self, time: TzRow) {
     self.time = Some(time);
+  }
+
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct PcZone {
+  pc: String,
+  #[serde(skip_serializing_if = "Vec::is_empty")]
+  addresses: Vec<String>,
+  lat: f64,
+  lng: f64,
+  alt: f64,
+  n: f64,
+  e: f64,
+  c: String,
+  cy: String,
+  d: String,
+  wc: String,
+  cs: String,
+  lc: String,
+  w: String,
+  gr: String,
+  #[serde(rename="modifiedAt")]
+  modified_at: String,
+  distance: f64,
+  pn: String,
+}
+
+impl PcZone {
+  pub fn new(dc: &Document) -> PcZone {
+    let distance = extract_f64(dc, "dist");
+    let lat = extract_f64(dc, "lat");
+    let lng = extract_f64(dc, "lng");
+    let n = extract_f64(dc, "n");
+    let e = extract_f64(dc, "e");
+    let alt = extract_f64(dc, "alt");
+    let wc = extract_string(dc, "wc");
+    let c = extract_string(dc, "c");
+    let cy = extract_string(dc, "cy");
+    let cs = extract_string(dc, "cs");
+    let gr = extract_string(dc, "gr");
+    let pc = extract_string(dc, "pc");
+    let d = extract_string(dc, "d");
+    let lc = extract_string(dc, "lc");
+    let w = extract_string(dc, "w");
+    let modified_at =  extract_datetime(dc, "modifiedAt");
+    let pn = extract_string(dc, "pn");
+    let addresses = extract_strings(dc, "addresses");
+    PcZone {
+      pc,
+      addresses,
+      lat,
+      lng,
+      alt,
+      n,
+      e,
+      c,
+      cy,
+      d,
+      wc,
+      cs,
+      lc,
+      w,
+      gr,
+      distance,
+      modified_at,
+      pn
+    }
+  }
+
+  pub fn has_addresses(&self) -> bool {
+    self.addresses.len() > 0
+  }
+
+  pub fn add_addresses(&mut self, addresses: &[String]) {
+    self.addresses = addresses.to_vec();
   }
 
 }

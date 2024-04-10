@@ -45,6 +45,21 @@ pub fn extract_string_from_value_map(row: &Map<String, Value>, key: &str) -> Str
   }
 }
 
+pub fn extract_display_strings_from_value_map(row: &Map<String, Value>, key: &str) -> Vec<String> {
+  if let Some(mp) = row.get(key) {
+    if let Some(items) = mp.as_array() {
+      return items.into_iter().filter_map(|item| {
+        if let Some(inner_item) = item.as_object() {
+          extract_optional_string_from_value_map(inner_item, "Display")
+        } else {
+          None
+        }
+      }).collect::<Vec<String>>();
+    }
+  }
+  vec![]
+}
+
 pub fn extract_u32_from_value_map(row: &Map<String, Value>, key: &str) -> u32 {
   match row.get(key) {
       Some(num_val) => match num_val {

@@ -1,6 +1,6 @@
 use serde_json::{Map, Value};
 use mongodb::Client;
-use crate::{common::get_gtz_url, fetchers::get_nearest_pc_info, models::{Geo, GeoNearby, GeoTimeInfo, TzRow}};
+use crate::{common::{get_gtz_url, is_valid_zone_name}, fetchers::get_nearest_pc_info, models::{Geo, GeoNearby, GeoTimeInfo, TzRow}};
 
 
 
@@ -43,18 +43,18 @@ pub async fn get_geotz_data(client: &Client, geo: Geo, date_opt: Option<&str>) -
 
 pub async fn get_tz_data(geo_opt: Option<Geo>, zn_opt: Option<&str>, date_opt: Option<&str>) -> Option<TzRow> {
   let client = reqwest::Client::new();
-  let opt_str = if let Some(geo) = geo_opt {
-    geo.to_string()
-  } else if let Some(zn) = zn_opt {
+  let opt_str = if let Some(zn) = zn_opt {
     zn.to_string()
+  } else if let Some(geo) = geo_opt {
+    geo.to_string()
   } else {
     "".to_string()
   };
-  let opt_key = if geo_opt.is_some() { "loc" } else { "zn" };
+  let opt_key = if zn_opt.is_some() { "zn" } else { "loc" };
   let mut query_params = vec![
     (opt_key, opt_str.as_str()),
   ];
-  let valid = geo_opt.is_some() | (opt_str.len() > 3 && opt_str.contains("/"));
+  let valid = geo_opt.is_some() || is_valid_zone_name(&opt_str);
   if date_opt.is_some() {
     query_params.push(("dt", date_opt.unwrap_or("")));
   }
@@ -69,7 +69,11 @@ pub async fn get_tz_data(geo_opt: Option<Geo>, zn_opt: Option<&str>, date_opt: O
     if let Ok(result_string) = result {
       let data: Map<String, Value> = serde_json::from_str(&result_string).unwrap();
       if data.contains_key("abbreviation") {
-        return Some(TzRow::new(&data));
+        let mut tz_data = TzRow::new(&data);
+        if let Some(geo) = geo_opt {
+          tz_data.calc_solar_offset(geo.lng);
+        }
+        return Some(tz_data);
       }
     }
   }

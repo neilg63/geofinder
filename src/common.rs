@@ -1,9 +1,10 @@
+use std::fs::read_to_string;
 use axum::{http::StatusCode, response::IntoResponse};
 use serde::Deserialize;
 use serde_json::{json, Value};
 use serde_with::skip_serializing_none;
 use simple_string_patterns::*;
-
+use string_patterns::PatternMatch;
 use crate::models::Geo;
 
 pub fn get_db_name() -> String {
@@ -12,6 +13,10 @@ pub fn get_db_name() -> String {
 
 pub fn get_gtz_url() -> String {
   dotenv::var("GEOTIMEZONE_API").unwrap_or("http://localhost:8080".to_string())
+}
+
+pub fn get_addresses_url() -> String {
+  dotenv::var("ADDRESSES_API").unwrap_or("http://localhost:8080".to_string())
 }
 
 pub async fn handler_404() -> impl IntoResponse {
@@ -75,4 +80,44 @@ impl GeoParams {
       None
     }
   }
+}
+
+#[skip_serializing_none]
+#[derive(Deserialize, Debug, Clone)]
+pub struct PostParams {
+  pub lat: Option<f64>,
+  pub lng: Option<f64>,
+  pub pc: Option<String>,
+  pub km: Option<f64>,
+  pub skip: Option<u32>,
+  pub limit: Option<u32>,
+  pub code: Option<String>,
+}
+
+pub fn is_valid_date_string(dt_str: &str) -> bool {
+  dt_str.pattern_match_cs(r#"^\d\d\d\d-[01]\d-[0-3]\d"#)
+}
+
+pub fn is_valid_zone_name(dt_str: &str) -> bool {
+  dt_str.pattern_match_cs(r#"^\w+/\w+"#)
+}
+
+pub fn is_valid_uk_postcode(dt_str: &str) -> bool {
+  dt_str.pattern_match_cs(r#"^[A-Z]+\d\s\d"#)
+}
+
+pub fn natural_tz_offset_from_utc(lng: f64) -> i64 {
+  let lng360 = (lng + 540f64) % 360f64;
+  let lng180 = lng360 - 180f64;
+  (lng180 * 4f64 * 60f64) as i64
+}
+
+pub fn read_lines(filename: &str) -> Vec<String> {
+  let mut result = Vec::new();
+  if let Ok(file_content) = read_to_string(filename) {
+    for line in file_content.lines() {
+      result.push(line.to_string())
+    }
+  }
+  result
 }

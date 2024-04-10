@@ -648,6 +648,7 @@ dependencies = [
  "dotenv",
  "futures",
  "mongodb",
+ "rand",
  "redis",
  "reqwest",
  "serde",
@@ -1871,9 +1872,9 @@ dependencies = [
 
 [[package]]
 name = "simple-string-patterns"
-version = "0.3.11"
+version = "0.3.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "602fef90a54b4197b88aab9be2ba93c4f477c6b36456c42a53718501f2f16b0f"
+checksum = "582b00d9863a1e0e30465a3222ad48b20748f384379ac012af63cc4732580d0c"
 
 [[package]]
 name = "slab"

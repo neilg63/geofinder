@@ -98,3 +98,29 @@ pub fn redis_get_timezone(key: &str) -> Option<TzRow> {
     None
   }
 }
+
+pub fn  redis_set_strings(key: &str, data: &Vec<String>) -> bool {
+  let mut valid = false;
+  if let Ok(mut connection) =  redis_client() {
+    if let Ok(value) = serde_json::to_string(data) {
+      let rs = connection.set::<String,String,String>(key.to_string(), value);
+      if let Ok(_result) = rs {
+          valid = true;
+      }
+    }
+  }
+  valid
+}
+
+pub fn redis_get_strings(key: &str) -> Option<Vec<String>> {
+  if let Some(result) = redis_get_opt_string(key) {
+    if let Ok(item) = serde_json::from_str::<Vec<String>>(&result) {
+        Some(item)
+    } else {
+        None
+    }
+  } else {
+    None
+  }
+}
+

@@ -2,37 +2,34 @@ use std::{ops::Add, str::FromStr};
 use bson::Bson;
 use chrono::Duration;
 use mongodb::{
-    bson::{doc, Document, oid::ObjectId},
-    Client,
-    Collection,
-    options::{FindOptions, AggregateOptions},
+    bson::{doc, oid::ObjectId, Document}, options::{AggregateOptions, FindOptions, UpdateOptions}, Client, Collection
 };
 use futures::stream::StreamExt;
 use serde_json::{json, Map, Value};
 use string_patterns::*;
 
-use crate::{common::{build_store_key_from_geo, get_db_name}, models::{Geo, GeoNearby, PcInfo, PcRow, TzRow}, store::{redis_get_pc_results, redis_set_pc_results}};
+use crate::{common::{build_store_key_from_geo, get_db_name}, models::{Geo, GeoNearby, PcInfo, PcRow, PcZone, TzRow}, store::{redis_get_pc_results, redis_set_pc_results}};
 
 pub async fn find_records(client: &Client, coll_name: &str, limit: u64, skip: u64, filter_options: Option<Document>, fields: Option<Vec<&str>>) -> Vec<Document> {
   let db_name = get_db_name();
-    let collection: Collection<Document> =
-        client.database(&db_name).collection::<Document>(coll_name);
-    let max = if limit > 0 { limit as i64 } else { 10000000i64 };
-    let mut projection: Option<Document> = None;
-    if let Some(field_list) = fields {
-        let mut doc = doc! {};
-        for field in field_list {
-            doc.insert(field, 1);
-        }
-        projection = Some(doc);
-    }
-    let find_options = FindOptions::builder().projection(projection).skip(skip).limit(max).build();
-    let cursor_r = collection
-        .find(
-            filter_options,
-            find_options,
-        )
-        .await;
+  let collection: Collection<Document> =
+      client.database(&db_name).collection::<Document>(coll_name);
+  let max = if limit > 0 { limit as i64 } else { 10000000i64 };
+  let mut projection: Option<Document> = None;
+  if let Some(field_list) = fields {
+      let mut doc = doc! {};
+      for field in field_list {
+          doc.insert(field, 1);
+      }
+      projection = Some(doc);
+  }
+  let find_options = FindOptions::builder().projection(projection).skip(skip).limit(max).build();
+  let cursor_r = collection
+      .find(
+          filter_options,
+          find_options,
+      )
+      .await;
    if let Ok(cursor) = cursor_r {
     let results: Vec<mongodb::error::Result<Document>> = cursor.collect().await;
     let mut rows: Vec<Document> = Vec::new();
@@ -66,17 +63,30 @@ pub async fn fetch_records(client: &Client, coll_name: &str, filter_options: Opt
     find_records(client, coll_name, 0, 0, filter_options, fields).await
 }
 
+pub async fn update_record(client: &Client, coll_name: &str, filter_options: &Document, values: &Document) -> bool {
+  let update = doc ! { "$set": values.to_owned() };
+  let db_name = get_db_name();
+  let collection: Collection<Document> = client.database(&db_name).collection::<Document>(coll_name);
+  let cursor_r = collection
+      .update_one(
+          filter_options.to_owned(),
+          update,
+          None
+      )
+      .await;
+  println!("{:?}", cursor_r);
+  cursor_r.is_ok()
+}
+
 pub async fn fetch_aggregated_with_options(client: &Client, coll_name: &str, pipeline: Vec<Document>, options: Option<AggregateOptions>) -> Vec<Document> {
   let db_name = get_db_name();
   let coll: Collection<Document> = client
         .database(&db_name)
         .collection::<Document>(coll_name);
-
-
     let cursor = coll
         .aggregate(pipeline, options)
         .await
-        .expect("could not load users data.");
+        .expect("could not load data.");
     let results: Vec<mongodb::error::Result<Document>> = cursor.collect().await;
     let mut rows: Vec<Document> = Vec::new();
     if results.len() > 0 {
@@ -153,3 +163,15 @@ pub async fn get_nearest_pc_info(client: &Client, geo: Geo) -> Option<PcInfo> {
   info
 }
 
+pub async fn update_pc_addresses(client: &Client, pc: &str, addresses: &[String]) -> bool {
+  let query = doc ! { "pc": pc };
+  let data = doc ! { "addresses": addresses };
+  update_record(client, "zones",&query, &data).await
+}
+
+
+pub async fn fetch_pc_zone(client: &Client, pc: &str) -> Option<PcZone> {
+  let filter = Some(doc ! { "pc": pc });
+  let result = fetch_record(client, "zones",filter).await;
+  result.map(|item| PcZone::new(&item))
+}

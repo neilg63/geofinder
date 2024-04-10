@@ -10,6 +10,7 @@ pub fn extract_string(doc: &Document, key: &str) -> String {
   doc.get_str(key).unwrap_or("")
 }
 
+ */
 pub fn extract_datetime(doc: &Document, key: &str) -> String {
   if let Ok(dt_val) = doc.get_datetime(key) {
     dt_val.to_string()
@@ -17,7 +18,6 @@ pub fn extract_datetime(doc: &Document, key: &str) -> String {
     "".to_string()
   }
 }
-
 pub fn extract_isodt(doc: &Document, key: &str) -> Option<DateTime<Utc>> {
   if let Ok(dt_val) = doc.get_datetime(key) {
     Some(dt_val.to_chrono())
@@ -35,7 +35,7 @@ pub fn extract_isodt_as_string(doc: &Document, key: &str) -> Option<String> {
 
 pub fn extract_bool(doc: &Document, key: &str, def_val: bool) -> bool {
   doc.get_bool(key).unwrap_or(def_val)
-} */
+}
 
 pub fn extract_i32(doc: &Document, key: &str) -> i32 {
   if let Ok(vl) = doc.get_i32(key) {
