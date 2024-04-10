@@ -63,6 +63,22 @@ impl GeoNearby {
     self.pc = Some(info.to_owned());
   }
 
+  pub fn to_simple(&self) -> SimplePlace {
+    SimplePlace::new(self.lat, self.lng, &self.name)
+  }
+
+  pub fn to_places(&self) -> Vec<SimplePlace> {
+    vec![self.to_simple()]
+  }
+
+  pub fn to_states(&self) -> Vec<SimplePlace> {
+    vec![
+      SimplePlace::new(self.lat, self.lng, &self.admin_name),
+      SimplePlace::new(self.lat, self.lng, &self.region),
+      SimplePlace::new(self.lat, self.lng, &self.country_name)
+    ]
+  }
+
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -365,3 +381,152 @@ impl PcZone {
   }
 
 }
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct SimplePlace {
+  lng: f64,
+  lat: f64,
+  name: String,
+}
+
+impl SimplePlace {
+  pub fn new(lat: f64, lng: f64, name: &str) -> Self {
+    SimplePlace {
+      lat,
+      lng,
+      name: name.to_string(),
+    }
+  }
+}
+
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct PlaceOfInterest {
+  lng: f64,
+  lat: f64,
+  distance: f64,
+  name: String,
+  #[serde(rename="typeClass")]
+  type_class: String,
+  #[serde(rename="typeName")]
+  type_name: String,
+}
+
+impl PlaceOfInterest {
+  pub fn new(row: Map<String, Value>) -> Self {
+    let lng = extract_f64_from_value_map(&row, "lng");
+    let lat = extract_f64_from_value_map(&row, "lat");
+    let distance = extract_f64_from_value_map(&row, "distance");
+    let name = extract_string_from_value_map(&row, "name");
+    let type_class = extract_string_from_value_map(&row, "typeClass");
+    let type_name = extract_string_from_value_map(&row, "typeName");
+    PlaceOfInterest { 
+        lng,
+        lat,
+        distance,
+        name,
+        type_class,
+        type_name,
+    }
+  }
+}
+
+pub async fn build_pois(output: Option<Map<String, Value>>) -> Vec<PlaceOfInterest> {
+  let mut rows:Vec<PlaceOfInterest> = vec![];
+  if let Some(data) = output {
+    if data.contains_key("poi") {
+      rows = match &data["poi"] {
+        Value::Array(items) => {
+          let mut new_rows: Vec<PlaceOfInterest> = vec![];
+          for row in items {
+            match row {
+              Value::Object(row_map) => {
+                let new_row = PlaceOfInterest::new(row_map.clone());
+                new_rows.push(new_row);
+              },
+              _ => ()
+            }
+          }
+          new_rows
+        },
+        _ => Vec::new(),
+      };
+    }
+  }
+  rows
+}
+
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct WeatherReport {
+  lat: f64,
+  lng: f64,
+  datetime: String,
+  temperature: f64,
+  humidity: f64,
+  #[serde(rename="windSpeed")]
+  wind_speed: f64,
+  #[serde(rename="dewPoint")]
+  dew_point: f64,
+  #[serde(rename="stationName")]
+  station_name: String,
+  clouds: String
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct WikipediaSummary {
+  pub lat: f64,
+  pub lng: f64,
+  pub summary: String,
+  pub title: String,
+  pub elevation: f64,
+  pub distance: f64,
+  pub rank: i64,
+  pub lang: String,
+  #[serde(rename="wikipediaUrl")]
+  pub wikipedia_url: String
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct LocationInfo {
+  pub matched: bool,
+  pub valid: bool,
+  #[serde(rename="hasWeather")]
+  pub has_weather: bool,
+  #[serde(rename="hasPoi")]
+  pub has_poi: bool,
+  #[serde(rename="hasWikiEntries")]
+  pub has_wiki_entries: bool,
+  #[serde(rename="hasNearestAddress")]
+  pub has_nearest_address: bool,
+  #[serde(rename="hasPCs")]
+  pub has_pcs: bool,
+  pub num: u32,
+  pub zone: Option<PcZone>,
+  pub places: Vec<SimplePlace>,
+  pub states: Vec<SimplePlace>,
+  pub surrounding: Vec<PcZone>,
+  pub cached: bool,
+  pub weather: Option<WeatherReport>,
+  pub poi: Vec<PlaceOfInterest>,
+  pub wikipedia: Vec<WikipediaSummary>
+}
+/* 
+impl LocationInfo {
+  pub fn new(zone: Option<PcZone>, surrounding: Vec<PcZone>, places: Vec<SimplePlace>, states: Vec<SimplePlace>, poi: Vec<PlaceOfInterest>, wikipedia: Vec<WikipediaSummary>) -> Self {
+    let valid = places.len() > 0;
+    let matched = places.len() > 0;
+    let has_poi = poi.len() > 0;
+    LocationInfo {
+      valid,
+      matched,
+      has_poi,
+      zone,
+      surrounding,
+      places,
+      states,
+      poi,
+      wikipedia
+    }
+  }
+} */
