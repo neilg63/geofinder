@@ -12,6 +12,7 @@ mod common;
 mod store;
 mod geotime;
 mod addresses;
+mod geonames;
 
 mod handlers;
 
@@ -21,9 +22,9 @@ use std::time::Duration;
 
 use axum::{
   http::{self, HeaderMap},
-    http::{header, HeaderValue, StatusCode, Request},
+    http::{header, HeaderValue},
     routing::{get, post},
-    Router, response::Response, middleware::{Next, self},
+    Router, middleware::{Next, self},
 };
 use dotenv::dotenv;
 use mongodb::{
@@ -38,7 +39,7 @@ use tower_http::{
     cors::CorsLayer
 };
 use crate::common::{welcome, handler_404};
-use crate::handlers::{get_nearest_pcs,get_gtz,fetch_and_update_addresses};
+use crate::handlers::{get_nearest_pcs,get_gtz,fetch_and_update_addresses, get_weather_report,get_places_of_interest,get_nearby_wiki_summaries,get_geo_data};
 use crate::db::*;
 // use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -63,6 +64,10 @@ async fn main() {
         .route("/postcodes", get(get_nearest_pcs))
         .route("/gtz", get(get_gtz))
         .route("/addresses", post(fetch_and_update_addresses))
+        .route("/weather", get(get_weather_report))
+        .route("/places-of-interest", get(get_places_of_interest))
+        .route("/wiki-summaries", get(get_nearby_wiki_summaries))
+        .route("/geo-codes", post(get_geo_data))
         .layer(CorsLayer::permissive())
         // timeout requests after 10 secs, returning 408 status code
         .layer(TimeoutLayer::new(Duration::from_secs(10)))

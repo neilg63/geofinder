@@ -2,8 +2,6 @@ use serde_json::{Map, Value};
 use mongodb::Client;
 use crate::{common::{get_gtz_url, is_valid_zone_name}, fetchers::get_nearest_pc_info, models::{Geo, GeoNearby, GeoTimeInfo, TzRow}};
 
-
-
 pub async fn get_geotz_data(client: &Client, geo: Geo, date_opt: Option<&str>) -> Option<GeoTimeInfo> {
   let req_client = reqwest::Client::new();
   let loc = geo.to_string();

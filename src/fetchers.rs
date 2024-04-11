@@ -1,12 +1,7 @@
-use std::{ops::Add, str::FromStr};
-use bson::Bson;
-use chrono::Duration;
 use mongodb::{
     bson::{doc, oid::ObjectId, Document}, options::{AggregateOptions, FindOptions, UpdateOptions}, Client, Collection
 };
 use futures::stream::StreamExt;
-use serde_json::{json, Map, Value};
-use string_patterns::*;
 
 use crate::{common::{build_store_key_from_geo, get_db_name}, models::{Geo, GeoNearby, PcInfo, PcRow, PcZone, TzRow}, store::{redis_get_pc_results, redis_set_pc_results}};
 
@@ -140,6 +135,39 @@ pub async fn fetch_pcs(client: &Client, geo: Geo, km: f64, limit: u32) -> Vec<Pc
   let rows = fetch_aggregated(client, "zones", pipeline).await;
   if rows.len() > 0 {
     rows.into_iter().map(|row| PcRow::new(&row)).collect::<Vec<PcRow>>()
+  } else {
+    vec![]
+  }
+}
+
+pub async fn fetch_pc_zones(client: &Client, geo: Geo, km: f64, limit: u32) -> Vec<PcZone> {
+  let geo_search = build_geo_search(geo, km);
+  let mut pipeline = vec![geo_search];
+  let projection = doc! {
+    "_id": 0,
+    "lat": 1,
+    "lng": 1,
+    "alt": 1,
+    "pc": 1,
+    "addresses": 1,
+    "c": 1,
+    "cv": 1,
+    "d": 1,
+    "lc": 1,
+    "w": 1,
+    "wc": 1,
+    "e": 1,
+    "n": 1,
+    "gr": 1,
+    "distance": 1,
+    "modifiedAt": 1,
+  };
+  pipeline.push(doc! { "$project": projection } );
+  let limit_u32 = if limit < 2 { 2 } else if limit > 1000  { 1000  } else { limit };
+  pipeline.push(doc! { "$limit":  limit_u32 } );
+  let rows = fetch_aggregated(client, "zones", pipeline).await;
+  if rows.len() > 0 {
+    rows.into_iter().map(|row| PcZone::new(&row)).collect::<Vec<PcZone>>()
   } else {
     vec![]
   }

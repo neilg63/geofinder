@@ -15,6 +15,10 @@ pub fn get_gtz_url() -> String {
   dotenv::var("GEOTIMEZONE_API").unwrap_or("http://localhost:8080".to_string())
 }
 
+pub fn get_geonames_username() -> String {
+  dotenv::var("GEONAMES_USERNAME").unwrap_or("demo".to_string())
+}
+
 pub fn get_addresses_url() -> String {
   dotenv::var("ADDRESSES_API").unwrap_or("http://localhost:8080".to_string())
 }

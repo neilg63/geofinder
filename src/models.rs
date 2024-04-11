@@ -1,3 +1,6 @@
+use std::collections::HashSet;
+
+use bson::datetime;
 use serde::{Deserialize, Serialize};
 use serde_json::*;
 use bson::{doc, Document};
@@ -161,6 +164,15 @@ impl Geo {
       lng,
       alt: 10f64
     }
+  }
+
+
+
+  pub fn to_approx_key(&self, places: u8) -> String {
+    let multiple = 10f64.powf(places as f64);
+    let lat_str = ((self.lat * multiple).round() / multiple).to_string();
+    let lng_str = ((self.lng * multiple).round() / multiple).to_string();
+    format!("{}_{}", lat_str, lng_str)
   }
 
 }
@@ -332,7 +344,7 @@ pub struct PcZone {
 
 impl PcZone {
   pub fn new(dc: &Document) -> PcZone {
-    let distance = extract_f64(dc, "dist");
+    let distance = extract_f64(dc, "distance");
     let lat = extract_f64(dc, "lat");
     let lng = extract_f64(dc, "lng");
     let n = extract_f64(dc, "n");
@@ -417,9 +429,12 @@ impl PlaceOfInterest {
     let lng = extract_f64_from_value_map(&row, "lng");
     let lat = extract_f64_from_value_map(&row, "lat");
     let distance = extract_f64_from_value_map(&row, "distance");
-    let name = extract_string_from_value_map(&row, "name");
+    let mut name = extract_string_from_value_map(&row, "name").trim().to_string();
     let type_class = extract_string_from_value_map(&row, "typeClass");
     let type_name = extract_string_from_value_map(&row, "typeName");
+    if name.len() < 1 {
+      name = type_name.clone();
+    }
     PlaceOfInterest { 
         lng,
         lat,
@@ -429,29 +444,60 @@ impl PlaceOfInterest {
         type_name,
     }
   }
+
+  pub fn get_name(&self) -> String {
+    self.name.clone()
+  }
 }
 
-pub async fn build_pois(output: Option<Map<String, Value>>) -> Vec<PlaceOfInterest> {
+pub fn build_pois(data: Map<String, Value>) -> Vec<PlaceOfInterest> {
   let mut rows:Vec<PlaceOfInterest> = vec![];
-  if let Some(data) = output {
-    if data.contains_key("poi") {
-      rows = match &data["poi"] {
-        Value::Array(items) => {
-          let mut new_rows: Vec<PlaceOfInterest> = vec![];
-          for row in items {
-            match row {
-              Value::Object(row_map) => {
-                let new_row = PlaceOfInterest::new(row_map.clone());
+  let mut names: HashSet<String> = HashSet::new();
+  if data.contains_key("poi") {
+    rows = match &data["poi"] {
+      Value::Array(items) => {
+        let mut new_rows: Vec<PlaceOfInterest> = vec![];
+        for row in items {
+          match row {
+            Value::Object(row_map) => {
+              let new_row = PlaceOfInterest::new(row_map.clone());
+              let name = new_row.get_name();
+              if names.contains(&name) == false {
+                names.insert(name);
                 new_rows.push(new_row);
-              },
-              _ => ()
-            }
+              }
+            },
+            _ => ()
           }
-          new_rows
-        },
-        _ => Vec::new(),
-      };
-    }
+        }
+        new_rows
+      },
+      _ => Vec::new(),
+    };
+  }
+  rows
+}
+
+
+pub fn build_wiki_summaries(data: Map<String, Value>) -> Vec<WikipediaSummary> {
+  let mut rows:Vec<WikipediaSummary> = vec![];
+  if data.contains_key("geonames") {
+    rows = match &data["geonames"] {
+      Value::Array(items) => {
+        let mut new_rows: Vec<WikipediaSummary> = vec![];
+        for row in items {
+          match row {
+            Value::Object(row_map) => {
+              let new_row = WikipediaSummary::new(row_map.clone());
+              new_rows.push(new_row);
+            },
+            _ => ()
+          }
+        }
+        new_rows
+      },
+      _ => Vec::new(),
+    };
   }
   rows
 }
@@ -473,6 +519,31 @@ pub struct WeatherReport {
   clouds: String
 }
 
+impl WeatherReport {
+  pub fn new(row: Map<String, Value>) -> Self {
+    let lng = extract_f64_from_value_map(&row, "lng");
+    let lat = extract_f64_from_value_map(&row, "lat");
+    let datetime = extract_string_from_value_map(&row, "datetime");
+    let temperature = extract_f64_from_value_map(&row, "temperature");
+    let humidity = extract_f64_from_value_map(&row, "humidity");
+    let wind_speed = extract_f64_from_value_map(&row, "windSpeed");
+    let dew_point = extract_f64_from_value_map(&row, "dewPoint");
+    let station_name = extract_string_from_value_map(&row, "stationName");
+    let clouds = extract_string_from_value_map(&row, "clouds");
+    WeatherReport { 
+        lat,
+        lng,
+        datetime,
+        temperature,
+        humidity,
+        wind_speed,
+        dew_point,
+        station_name,
+        clouds
+    }
+  }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct WikipediaSummary {
   pub lat: f64,
@@ -485,6 +556,31 @@ pub struct WikipediaSummary {
   pub lang: String,
   #[serde(rename="wikipediaUrl")]
   pub wikipedia_url: String
+}
+
+impl WikipediaSummary {
+  pub fn new(row: Map<String, Value>) -> Self {
+    let lng = extract_f64_from_value_map(&row, "lng");
+    let lat = extract_f64_from_value_map(&row, "lat");
+    let summary = extract_string_from_value_map(&row, "summary");
+    let title = extract_string_from_value_map(&row, "title");
+    let lang = extract_string_from_value_map(&row, "lang");
+    let elevation = extract_f64_from_value_map(&row, "elevation");
+    let distance = extract_f64_from_value_map(&row, "distance");
+    let rank = extract_optional_i64_from_value_map(&row, "rank").unwrap_or(-1);
+    let wikipedia_url = extract_string_from_value_map(&row, "wikipediaUrl");
+    WikipediaSummary { 
+        lat,
+        lng,
+        summary,
+        title,
+        elevation,
+        distance,
+        rank,
+        lang,
+        wikipedia_url
+    }
+  }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -511,22 +607,45 @@ pub struct LocationInfo {
   pub poi: Vec<PlaceOfInterest>,
   pub wikipedia: Vec<WikipediaSummary>
 }
-/* 
+
 impl LocationInfo {
-  pub fn new(zone: Option<PcZone>, surrounding: Vec<PcZone>, places: Vec<SimplePlace>, states: Vec<SimplePlace>, poi: Vec<PlaceOfInterest>, wikipedia: Vec<WikipediaSummary>) -> Self {
+  pub fn new(zones: Vec<PcZone>, places: Vec<SimplePlace>, states: Vec<SimplePlace>, weather: Option<WeatherReport>, poi: Vec<PlaceOfInterest>, wikipedia: Vec<WikipediaSummary>) -> Self {
     let valid = places.len() > 0;
     let matched = places.len() > 0;
     let has_poi = poi.len() > 0;
+    let num = zones.len() as u32;
+    let zone = zones.get(0).map(|z| z.to_owned());
+    let has_pcs = places.len() > 0;
+    let surrounding = (&zones[1..].to_vec()).to_owned();
+    let has_nearest_address = if let Some(zn) = zone.clone() {
+      zn.has_addresses()
+    } else {
+      false
+    };
+    let has_weather = weather.is_some();
+    let has_wiki_entries = wikipedia.len() > 0;
     LocationInfo {
       valid,
       matched,
+      has_weather,
+      has_wiki_entries,
+      has_nearest_address,
+      has_pcs,
       has_poi,
+      num,
       zone,
       surrounding,
       places,
       states,
+      weather,
       poi,
-      wikipedia
+      wikipedia,
+      cached: false
     }
+
   }
-} */
+
+  pub fn set_cached(&mut self) {
+    self.cached = true;
+  }
+}
