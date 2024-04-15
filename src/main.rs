@@ -39,7 +39,16 @@ use tower_http::{
     cors::CorsLayer
 };
 use crate::common::{welcome, handler_404};
-use crate::handlers::{get_nearest_pcs,get_gtz,fetch_and_update_addresses, get_weather_report,get_places_of_interest,get_nearby_wiki_summaries,get_geo_data};
+use crate::handlers::{
+    get_nearest_pcs,
+    get_gtz,
+    fetch_and_update_addresses,
+    get_weather_report,
+    get_places_of_interest,
+    get_nearby_wiki_summaries,
+    get_geo_data
+};
+
 use crate::db::*;
 // use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -68,6 +77,7 @@ async fn main() {
         .route("/places-of-interest", get(get_places_of_interest))
         .route("/wiki-summaries", get(get_nearby_wiki_summaries))
         .route("/geo-codes", post(get_geo_data))
+        // .route("/pc-updates", get(read_pc_zone_updates))
         .layer(CorsLayer::permissive())
         // timeout requests after 10 secs, returning 408 status code
         .layer(TimeoutLayer::new(Duration::from_secs(10)))

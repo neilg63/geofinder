@@ -11,6 +11,8 @@ pub fn extract_string(doc: &Document, key: &str) -> String {
 }
 
  */
+
+ 
 pub fn extract_datetime(doc: &Document, key: &str) -> String {
   if let Ok(dt_val) = doc.get_datetime(key) {
     dt_val.to_string()

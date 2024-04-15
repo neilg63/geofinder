@@ -1,9 +1,10 @@
 use mongodb::{
-    bson::{doc, oid::ObjectId, Document}, options::{AggregateOptions, FindOptions, UpdateOptions}, Client, Collection
+    bson::{doc, Document}, options::{AggregateOptions, FindOptions}, Client, Collection
 };
 use futures::stream::StreamExt;
+// use simple_string_patterns::ToSegments;
 
-use crate::{common::{build_store_key_from_geo, get_db_name}, models::{Geo, GeoNearby, PcInfo, PcRow, PcZone, TzRow}, store::{redis_get_pc_results, redis_set_pc_results}};
+use crate::{common::{build_store_key_from_geo, get_db_name}, models::{Geo, PcInfo, PcRow, PcZone}, store::{redis_get_pc_results, redis_set_pc_results}};
 
 pub async fn find_records(client: &Client, coll_name: &str, limit: u64, skip: u64, filter_options: Option<Document>, fields: Option<Vec<&str>>) -> Vec<Document> {
   let db_name = get_db_name();
@@ -69,7 +70,6 @@ pub async fn update_record(client: &Client, coll_name: &str, filter_options: &Do
           None
       )
       .await;
-  println!("{:?}", cursor_r);
   cursor_r.is_ok()
 }
 
@@ -203,3 +203,51 @@ pub async fn fetch_pc_zone(client: &Client, pc: &str) -> Option<PcZone> {
   let result = fetch_record(client, "zones",filter).await;
   result.map(|item| PcZone::new(&item))
 }
+
+fn extract_string_from_vec(vals: &Vec<String>, index: usize) -> String {
+  vals.get(index).unwrap_or(&"".to_string()).to_owned()
+}
+
+/* 
+pub async fn get_update_lines(client: &Client) -> usize {
+  let text_lines = read_lines("/Users/neil/apps/laravel/geotime-zone-extra-sources/dg_ng_export.tsv");
+  let mut counter: usize = 0;
+  let mut index = 0;
+  let start = 0;
+  for line in text_lines {
+    if index >= start {
+      let cells = line.to_parts("\t");
+      if cells.len() > 4 {
+        if let Some(pc) = cells.get(0) {
+          if pc.len() > 3 {
+            let updated = update_incomplete_pc_zone(client, &cells).await;
+            if updated {
+              counter += 1;
+            }
+          }
+        }
+      }
+      if counter > 10000 {
+        break;
+      }
+    }
+    index += 1;
+  }
+  counter
+}
+
+pub async fn update_incomplete_pc_zone(client: &Client, vals: &Vec<String>) -> bool {
+  if let Some(first) = vals.get(0) {
+    let pc = first.to_owned().clone();
+    let query = doc ! { "pc": pc, "w": { "$exists": false } };
+    let n = extract_string_from_vec(vals, 1);
+    let e = extract_string_from_vec(vals, 2);
+    let w = extract_string_from_vec(vals, 3);
+    let cy = extract_string_from_vec(vals, 4);
+    let d = extract_string_from_vec(vals, 5);
+    let gr = extract_string_from_vec(vals, 6);
+    let data = doc ! { "n": n, "e": e, "w": w, "cy": cy, "d": d, "gr": gr };
+    return update_record(client, "zones",&query, &data).await;
+  }
+  false
+} */

@@ -647,6 +647,7 @@ dependencies = [
  "chrono",
  "dotenv",
  "futures",
+ "julian_day_converter",
  "mongodb",
  "rand",
  "redis",
@@ -963,6 +964,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "29c15563dc2726973df627357ce0c9ddddbea194836909d655df6a75d2cf296d"
 dependencies = [
  "wasm-bindgen",
+]
+
+[[package]]
+name = "julian_day_converter"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2b8b1d2decaeec65c1d9729098450800ffb40767dcab1b9be3e6e7eb21c6e7a5"
+dependencies = [
+ "chrono",
 ]
 
 [[package]]

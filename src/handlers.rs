@@ -1,5 +1,3 @@
-use std::os::macos::raw::stat;
-
 use axum::{
   extract,
   http::StatusCode,
@@ -9,7 +7,14 @@ use axum::{
 use mongodb::Client;
 use serde_json::json;
 
-use crate::{addresses::get_remote_addresses, common::{build_store_key_from_geo, is_valid_date_string, GeoParams, PostParams}, fetchers::{fetch_pc_zone, fetch_pc_zones, fetch_pcs, update_pc_addresses}, geonames::{fetch_poi, fetch_weather, fetch_wiki_entries}, geotime::{get_geotz_data, get_tz_data}, models::{Geo, GeoTimeInfo, LocationInfo, SimplePlace}, store::{redis_get_geo_nearby, redis_get_pc_results, redis_get_pc_zones, redis_get_poi, redis_get_weather, redis_get_wiki_summaries, redis_set_geo_nearby, redis_set_pc_results, redis_set_pc_zones, redis_set_poi, redis_set_weather, redis_set_wiki_summaries}};
+use crate::{
+  addresses::get_remote_addresses, 
+  common::{build_store_key_from_geo, is_valid_date_string, GeoParams, PostParams},
+  fetchers::{fetch_pc_zone, fetch_pc_zones, fetch_pcs, update_pc_addresses},
+  geonames::{fetch_poi, fetch_poi_cached, fetch_weather, fetch_weather_cached, fetch_wiki_entries, fetch_wiki_entries_cached},
+  geotime::{get_geotz_data, get_tz_data}, models::{Geo, GeoTimeInfo, LocationInfo, SimplePlace},
+  store::{redis_get_geo_nearby, redis_get_pc_results, redis_get_pc_zones, redis_get_poi, redis_get_weather, redis_get_wiki_summaries, redis_set_geo_nearby, redis_set_pc_results, redis_set_pc_zones, redis_set_poi, redis_set_weather, redis_set_wiki_summaries}
+};
 
 
 pub async fn get_nearest_pcs(extract::State(client): extract::State<Client>, query: extract::Query<GeoParams>) -> impl IntoResponse {
@@ -102,42 +107,35 @@ pub async fn fetch_and_update_addresses(extract::State(client): extract::State<C
 
 pub async fn get_weather_report(query: extract::Query<GeoParams>) -> impl IntoResponse {
   let mut response = json!({ "valid": false });
-  let mut status = StatusCode::NOT_FOUND;
+  let mut status = StatusCode::NOT_ACCEPTABLE;
   if let Some(geo) = query.to_geo_opt() {
-    let ck = format!("weather_{}", geo.to_approx_key(1));
-    status = StatusCode::NOT_ACCEPTABLE;
-    if let Some(weather) = redis_get_weather(&ck) {
-      response = json!({ "valid": true, "cached": true, "weather": weather });
-      status = StatusCode::OK;
+    let (weather_opt, cached) = fetch_weather_cached(geo).await;
+    status = if weather_opt.is_some() {
+      StatusCode::OK
     } else {
-      let weather_opt = fetch_weather(geo).await;
-      if let Some(weather) = weather_opt {
-        redis_set_weather(&ck,&weather);
-        response = json!({ "valid": true, "cached": false, "weather": weather });
-        status = StatusCode::OK;
-      }
+      StatusCode::NOT_FOUND
+    };
+    if let Some(weather)=  weather_opt {
+      response = json!({ "valid": true, "cached": cached, "weather": weather });
+    } else {
+      response = json!({ "valid": true, "cached": false });
     }
-    
   }
   (status, Json(response))
 }
 
 pub async fn get_places_of_interest(query: extract::Query<GeoParams>) -> impl IntoResponse {
   let mut response = json!({ "valid": false });
-  let mut status = StatusCode::NOT_FOUND;
+  let mut status = StatusCode::NOT_ACCEPTABLE;
   if let Some(geo) = query.to_geo_opt() {
-    let ck = format!("plofint_{}", geo.to_approx_key(3));
-    status = StatusCode::NOT_ACCEPTABLE;
-    if let Some(poi) = redis_get_poi(&ck) {
-      response = json!({ "valid": true, "cached": true, "items": poi });
-      status = StatusCode::OK;
+    let (poi_opt, cached) = fetch_poi_cached(geo).await;
+    status = if poi_opt.is_some() { 
+      StatusCode::OK
     } else {
-      let poi_opt = fetch_poi(geo).await;
-      if let Some(poi) = poi_opt {
-        redis_set_poi(&ck,&poi);
-        response = json!({ "valid": true, "cached": false, "items": poi });
-        status = StatusCode::OK;
-      }
+      StatusCode::NOT_FOUND
+    };
+    if let Some(poi) = poi_opt {
+      response = json!({ "valid": true, "cached": cached, "items": poi });
     }
     
   }
@@ -146,22 +144,17 @@ pub async fn get_places_of_interest(query: extract::Query<GeoParams>) -> impl In
 
 pub async fn get_nearby_wiki_summaries(query: extract::Query<GeoParams>) -> impl IntoResponse {
   let mut response = json!({ "valid": false });
-  let mut status = StatusCode::NOT_FOUND;
+  let mut status = StatusCode::NOT_ACCEPTABLE;
   if let Some(geo) = query.to_geo_opt() {
-    let ck = format!("wiki_{}", geo.to_approx_key(3));
-    status = StatusCode::NOT_ACCEPTABLE;
-    if let Some(poi) = redis_get_wiki_summaries(&ck) {
-      response = json!({ "valid": true, "cached": true, "items": poi });
-      status = StatusCode::OK;
+    let (items_opt, cached) = fetch_wiki_entries_cached(geo).await;
+    status = if items_opt.is_some() {
+      StatusCode::OK
     } else {
-      let wk_opt = fetch_wiki_entries(geo).await;
-      if let Some(wks) = wk_opt {
-        redis_set_wiki_summaries(&ck,&wks);
-        response = json!({ "valid": true, "cached": false, "items": wks });
-        status = StatusCode::OK;
-      }
+      StatusCode::NOT_FOUND
+    };
+    if let Some(items) = items_opt {
+      response = json!({ "valid": true, "cached": cached, "items": items });
     }
-    
   }
   (status, Json(response))
 }
@@ -169,17 +162,8 @@ pub async fn get_nearby_wiki_summaries(query: extract::Query<GeoParams>) -> impl
 pub async fn get_geo_data(extract::State(client): extract::State<Client>, query: extract::Json<PostParams>) -> impl IntoResponse {
   if let Some(lat) = query.lat {
     let geo = Geo::new(lat, query.lng.unwrap_or(0.0), 10.0);
-    let limit = 20;
-    let km = 5.0;
-    let ck = build_store_key_from_geo("pzones", geo, Some(km), Some(limit));
-    let mut rows = redis_get_pc_zones(&ck);
-    if rows.len() < 10000 {
-      rows = fetch_pc_zones(&client, geo, km, limit).await;
-      if rows.len() > 0 {
-        redis_set_pc_zones(&ck, &rows);
-      }
-    }
     let ck = build_store_key_from_geo("place", geo, None, None);
+    let mut pn = "".to_string();
     let mut geo_data = redis_get_geo_nearby(&ck);
     let mut places: Vec<SimplePlace> = vec![];
     let mut states: Vec<SimplePlace> = vec![];
@@ -194,11 +178,47 @@ pub async fn get_geo_data(extract::State(client): extract::State<Client>, query:
     if let Some(geo_item) = geo_data {
       places = geo_item.to_places();
       states = geo_item.to_states();
+      pn = geo_item.name.clone();
     }
-    let result = LocationInfo::new(rows, places, states, None, vec![], vec![]);
+    let limit = 20;
+    let km = 5.0;
+    let ck = build_store_key_from_geo("pzones", geo, Some(km), Some(limit));
+    let mut rows = redis_get_pc_zones(&ck);
+    if rows.len() < 1 {
+      rows = fetch_pc_zones(&client, geo, km, limit).await;
+      if rows.len() > 0 {
+        redis_set_pc_zones(&ck, &rows);
+      }
+    }
+    if let Some(first) = rows.get_mut(0) {
+      first.add_pn(&pn);
+      if !first.has_addresses() {
+        let pc = first.pc.as_str();
+        let addresses_opt = get_remote_addresses(pc).await;
+        
+        if let Some(addresses) = addresses_opt {
+          update_pc_addresses(&client, pc, &addresses).await;
+          first.add_addresses(&addresses);
+          redis_set_pc_zones(&ck, &rows);
+        }
+      }
+    }
+    
+    let (weather, _weather_cached) = fetch_weather_cached(geo).await;
+    let (poi_opt, _poi_cached) = fetch_poi_cached(geo).await;
+    let poi = poi_opt.unwrap_or(vec![]);
+    let (wiki_items_opt, _wiki_cached) = fetch_wiki_entries_cached(geo).await;
+    let wikipedia = wiki_items_opt.unwrap_or(vec![]);
+    let result = LocationInfo::new(rows, places, states, weather, poi, wikipedia);
     let response = json!(result);
     return (StatusCode::OK, Json(response));
   }
   let response = json!({ "valid": false });
   (StatusCode::NOT_ACCEPTABLE, Json(response))
 }
+
+/* pub async fn read_pc_zone_updates(extract::State(client): extract::State<Client>, query: extract::Query<GeoParams>) -> impl IntoResponse {
+  let num_updated = get_update_lines(&client).await;
+  let response = json!({ "valid": false, "num_updated": num_updated });
+  (StatusCode::OK, Json(response))
+} */

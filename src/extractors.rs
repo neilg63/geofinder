@@ -81,3 +81,40 @@ pub fn extract_bool_from_value_map(row: &Map<String, Value>, key: &str, def_val:
       _ => def_val,
   }
 }
+
+pub fn extract_from_key_f64_values(data: &Map<String, Value>, key: &str) -> Vec<f64> {
+  let mut positions: Vec<f64> = vec![];
+  if data.contains_key("values") {
+    if let Some(values) = data.get("values") {
+      if let Some(items) = values.as_array() {
+        for item in items.into_iter() {
+          if let Some(obj) = item.as_object() {
+            let v = extract_f64_from_value_map(obj, key);
+            positions.push(v);
+          }
+        }
+      }
+    }
+  }
+  positions
+}
+
+pub fn extract_inner_i64(data: &Map<String, Value>, key_1: &str, key_2: &str) -> i64 {
+  let mut val_i64 = 0i64;
+  if let Some(inner) = data.get(key_1) {
+    if let Some(item) = inner.as_object() {
+      val_i64 = extract_optional_i64_from_value_map(item, key_2).unwrap_or(0);
+    }
+  }
+  val_i64
+}
+
+pub fn extract_inner_f64(data: &Map<String, Value>, key_1: &str, key_2: &str) -> f64 {
+  let mut val_f64 = 0f64;
+  if let Some(inner) = data.get(key_1) {
+    if let Some(item) = inner.as_object() {
+      val_f64 = extract_f64_from_value_map(item, key_2);
+    }
+  }
+  val_f64
+}

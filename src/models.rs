@@ -1,5 +1,5 @@
 use std::collections::HashSet;
-
+use julian_day_converter::*;
 use bson::datetime;
 use serde::{Deserialize, Serialize};
 use serde_json::*;
@@ -320,7 +320,7 @@ impl GeoTimeInfo {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PcZone {
-  pc: String,
+  pub pc: String,
   #[serde(skip_serializing_if = "Vec::is_empty")]
   addresses: Vec<String>,
   lat: f64,
@@ -338,13 +338,14 @@ pub struct PcZone {
   gr: String,
   #[serde(rename="modifiedAt")]
   modified_at: String,
-  distance: f64,
-  pn: String,
+  dist: f64,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pn: Option<String>,
 }
 
 impl PcZone {
   pub fn new(dc: &Document) -> PcZone {
-    let distance = extract_f64(dc, "distance");
+    let dist = extract_f64(dc, "distance");
     let lat = extract_f64(dc, "lat");
     let lng = extract_f64(dc, "lng");
     let n = extract_f64(dc, "n");
@@ -360,7 +361,6 @@ impl PcZone {
     let lc = extract_string(dc, "lc");
     let w = extract_string(dc, "w");
     let modified_at =  extract_datetime(dc, "modifiedAt");
-    let pn = extract_string(dc, "pn");
     let addresses = extract_strings(dc, "addresses");
     PcZone {
       pc,
@@ -378,9 +378,9 @@ impl PcZone {
       lc,
       w,
       gr,
-      distance,
+      dist,
       modified_at,
-      pn
+      pn: None
     }
   }
 
@@ -390,6 +390,10 @@ impl PcZone {
 
   pub fn add_addresses(&mut self, addresses: &[String]) {
     self.addresses = addresses.to_vec();
+  }
+
+  pub fn add_pn(&mut self, place_name: &str) {
+    self.pn = Some(place_name.to_string());
   }
 
 }
@@ -615,8 +619,12 @@ impl LocationInfo {
     let has_poi = poi.len() > 0;
     let num = zones.len() as u32;
     let zone = zones.get(0).map(|z| z.to_owned());
-    let has_pcs = places.len() > 0;
-    let surrounding = (&zones[1..].to_vec()).to_owned();
+    let has_pcs = zones.len() > 0;
+    let surrounding = if num > 0 {
+      (&zones[1..].to_vec()).to_owned()
+    } else {
+      vec![]
+    };
     let has_nearest_address = if let Some(zn) = zone.clone() {
       zn.has_addresses()
     } else {
@@ -649,3 +657,160 @@ impl LocationInfo {
     self.cached = true;
   }
 }
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AscendantData {
+  pub lng: f64,
+  pub positions: Vec<f64>,
+}
+
+impl AscendantData {
+  pub fn new(data: &Map<String, Value>) -> Self {
+    let mut positions: Vec<f64> = extract_from_key_f64_values(data, "as");
+    let index = extract_u32_from_value_map(data, "currentIndex") as usize;
+    let lng = positions.get(index).map(|v| v.to_owned()).unwrap_or(0.0);
+    AscendantData  {
+      lng,
+      positions,
+    }
+  }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct MoonData {
+  pub lng: f64,
+  pub positions: Vec<f64>,
+  pub phase: u8,
+  pub sun_angle: f64,
+  pub waxing: bool,
+}
+
+impl MoonData {
+  pub fn new(data: &Map<String, Value>) -> Self {
+    let mut positions: Vec<f64> = extract_from_key_f64_values(data, "mo");
+    let index = extract_u32_from_value_map(data, "currentIndex") as usize;
+    let lng = positions.get(index).map(|v| v.to_owned()).unwrap_or(0.0);
+    let mut phase = 0;
+    let mut sun_angle = 0.0;
+    let mut waxing = false;
+    if data.contains_key("moon") {
+      if let Some(inner) = data.get("moon") {
+        if let Some(moon) = inner.as_object() {
+          phase = extract_u32_from_value_map(moon, "phase") as u8;
+          waxing = extract_bool_from_value_map(moon, "waxing", false);
+          sun_angle = extract_f64_from_value_map(moon, "sunAngle");
+        }
+      }
+    }
+    MoonData  {
+      lng,
+      positions,
+      phase,
+      sun_angle,
+      waxing
+    }
+  }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct SunData {
+  pub lng: f64,
+  pub positions: Vec<f64>,
+  pub rise: Option<i64>,
+  pub set: Option<i64>,
+  pub mc: Option<i64>,
+  pub ic: Option<i64>,
+  pub min: f64,
+  pub max: f64,
+}
+
+impl SunData {
+  pub fn new(data: &Map<String, Value>) -> Self {
+    let mut positions: Vec<f64> = extract_from_key_f64_values(data, "su");
+    let index = extract_u32_from_value_map(data, "currentIndex") as usize;
+    let lng = positions.get(index).map(|v| v.to_owned()).unwrap_or(0.0);
+    let mut rise: Option<i64> = None;
+    let mut set: Option<i64> = None;
+    let mut mc: Option<i64> = None;
+    let mut ic: Option<i64> = None;
+    let mut min: f64 = 0.0;
+    let mut max: f64 = 0.0;
+    if data.contains_key("sunRiseSets") {
+      if let Some(inner) = data.get("sunRiseSets") {
+        if let Some(rows) = inner.as_array() {
+          for row in rows.into_iter() {
+            if let Some(obj) = row.as_object() {
+              let v = extract_f64_from_value_map(obj, "value");
+              let key = extract_string_from_value_map(obj, "key");
+              match key.as_str() {
+                "rise" => {
+                  rise = Some(julian_day_to_unixtime(v));
+                },
+                "set" => {
+                  set = Some(julian_day_to_unixtime(v));
+                },
+                "mc" => {
+                  mc = Some(julian_day_to_unixtime(v));
+                },
+                "ic" => {
+                  ic = Some(julian_day_to_unixtime(v));
+                },
+                "min" => {
+                  min = v;
+                },
+                "max" => {
+                  max = v;
+                },
+                _ => {}
+              }
+            }
+          }
+        }
+      }
+    }
+    SunData  {
+      lng,
+      positions,
+      rise,
+      set,
+      mc,
+      ic,
+      min,
+      max
+    }
+  }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AstroData {
+  pub start: i64,
+  pub time: i64,
+  pub end: i64,
+  pub interval: f64,
+  pub sun: Option<SunData>,
+  pub ascendant: Option<AscendantData>,
+  pub moon: Option<MoonData>,
+}
+
+impl AstroData {
+  pub fn new(data: &Map<String, Value>) -> Self {
+    let ascendant: Option<AscendantData> = Some(AscendantData::new(data));
+    let moon: Option<MoonData> = Some(MoonData::new(data));
+    let sun: Option<SunData> = Some(SunData::new(data));
+    let time: i64 = extract_inner_i64(data, "date", "unix");
+    let start: i64 = extract_inner_i64(data, "start", "unix");
+    let end: i64 = extract_inner_i64(data, "end", "unix");
+    let interval = extract_inner_f64(data, "interval", "days");
+    
+    AstroData {
+      start,
+      time,
+      end,
+      interval,
+      sun,
+      moon,
+      ascendant
+    }
+  }
+
+} 

@@ -43,13 +43,14 @@ pub async fn unauthorized() -> Value {
 pub(crate) fn build_store_key_from_geo(prefix: &str, geo: Geo, radius: Option<f64>, limit: Option<u32>) -> String {
   let mut extras: Vec<String> = Vec::new();
   if let Some(rv) = radius {
-    extras.push(format!("_{:2}", rv));
+    extras.push(format!("_{:2}", rv).strip_by_type(CharType::Spaces));
   }
   if let Some(lv) = limit {
-    extras.push(format!("_{}", lv));
+    extras.push(format!("_{}", lv).strip_by_type(CharType::Spaces));
   }
-  let extra = if extras.len() > 0 { extras.concat() } else { "".to_owned() };
-  format!("{}_{:4}_{:4}{}", prefix, geo.lat,geo.lng, extra)
+  let extra = if extras.len() > 0 { extras.concat().trim().to_owned() } else { "".to_owned() };
+  let g_c = format!("{:5}_{:5}",geo.lat,geo.lng);
+  format!("{}_{}{}", prefix, g_c, extra)
 }
 
 #[skip_serializing_none]
