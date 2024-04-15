@@ -29,79 +29,30 @@ pub fn redis_get_pc_results(key: &str) -> Vec<PcRow> {
 
 
 pub(crate) fn redis_set_pc_zones(key: &str, data: &Vec<PcZone>) -> bool {
-  if let Ok(mut connection) =  redis_client() {
-    if let Ok(value) = serde_json::to_string(&data) {
-      let store_result = connection.set::<String,String,String>(key.to_string(), value);
-        if let Ok(_result) = store_result {
-          return true;
-        }
-    }
-  }
-  false
+  redis_set_data::<Vec<PcZone>>(key, data, 0)
 }
 
 pub fn redis_get_pc_zones(key: &str) -> Vec<PcZone> {
-  if let Some(result) = redis_get_opt_string(key) {
-      if result.len() > 0 {
-          let mds: Vec<PcZone> = serde_json::from_str(&result).unwrap_or(vec![]);
-          mds
-      } else {
-          vec![]
-      }
-  } else {
-      vec![]
-  }
+  redis_get_data::<Vec<PcZone>>(key).unwrap_or(vec![])
 }
 
 
 pub fn  redis_set_geo_nearby(key: &str, data: &GeoNearby) -> bool {
-  let mut valid = false;
-  if let Ok(mut connection) =  redis_client() {
-    if let Ok(value) = serde_json::to_string(&data) {
-      if let Ok(_result) = connection.set::<String,String,String>(key.to_string(), value) {
-          valid = true;
-      }
-    }
-  }
-  valid
+  redis_set_data::<GeoNearby>(key, data, 0)
 }
 
 pub fn redis_get_geo_nearby(key: &str) -> Option<GeoNearby> {
-  if let Some(result) = redis_get_opt_string(key) {
-    if let Ok(item) = serde_json::from_str::<GeoNearby>(&result) {
-        Some(item)
-    } else {
-        None
-    }
-  } else {
-    None
-  }
+  redis_get_data::<GeoNearby>(key)
 }
 
-/* pub fn  redis_set_get_timezone(key: &str, data: &TzRow) -> bool {
-  let mut valid = false;
-  if let Ok(mut connection) =  redis_client() {
-    let stored_data: TzRow = data.clone();
-    if let Ok(value) = serde_json::to_string(&stored_data) {
-      if let Ok(_result) = connection.set::<String,String,String>(key.to_string(), value) {
-          valid = true;
-      }
-    }
-  }
-  valid
+pub fn  redis_set_get_timezone(key: &str, data: &TzRow) -> bool {
+  let expiry = 15 * 60;
+  redis_set_data::<TzRow>(key, data, expiry)
 }
 
 pub fn redis_get_timezone(key: &str) -> Option<TzRow> {
-  if let Some(result) = redis_get_opt_string(key) {
-    if let Ok(item) = serde_json::from_str::<TzRow>(&result) {
-        Some(item)
-    } else {
-        None
-    }
-  } else {
-    None
-  }
-} */
+  redis_get_data::<TzRow>(key)
+}
 
 pub fn  redis_set_strings(key: &str, data: &Vec<String>) -> bool {
   redis_set_data::<Vec<String>>(key, data, 0)
