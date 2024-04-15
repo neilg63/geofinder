@@ -8,7 +8,7 @@ pub enum GeoNamesService {
   Postcode,
   Extended,
   Weather,
-  PlacesOfInterets,
+  PlacesOfInterest,
   Wikipedia,
   Address
 }
@@ -19,7 +19,7 @@ impl GeoNamesService {
       Self::Postcode => "findNearbyPostalCodesJSON",
       Self::Extended => "extendedFindNearbyJSON",
       Self::Weather => "findNearByWeatherJSON",
-      Self::PlacesOfInterets => "findNearbyPOIsOSMJSON",
+      Self::PlacesOfInterest => "findNearbyPOIsOSMJSON",
       Self::Wikipedia => "findNearbyWikipediaJSON",
       Self::Address => "addressJSON",
       _ => ""
@@ -37,7 +37,7 @@ async fn fetch_from_geonames(geo: Geo, service: GeoNamesService) -> Option<Map<S
     ("lng", geo.lng.to_string()),
   ];
   match service {
-    GeoNamesService::PlacesOfInterets => {
+    GeoNamesService::PlacesOfInterest => {
       query_params.push(("radius", "1".to_string()));
       query_params.push(("style", "full".to_string()));
     },
@@ -107,7 +107,7 @@ pub async fn fetch_weather_cached(geo: Geo) -> (Option<WeatherReport>, bool) {
 }
 
 pub async fn fetch_poi(geo: Geo) -> Option<Vec<PlaceOfInterest>> {
-  if let Some(data) =  fetch_from_geonames(geo, GeoNamesService::PlacesOfInterets).await {
+  if let Some(data) =  fetch_from_geonames(geo, GeoNamesService::PlacesOfInterest).await {
     return Some(build_pois(data));
   }
   None

@@ -23,6 +23,10 @@ pub fn get_addresses_url() -> String {
   dotenv::var("ADDRESSES_API").unwrap_or("http://localhost:8080".to_string())
 }
 
+pub fn get_astro_url() -> String {
+  dotenv::var("ASTRO_API").unwrap_or("http://localhost:8080".to_string())
+}
+
 pub async fn handler_404() -> impl IntoResponse {
     (StatusCode::NOT_FOUND, "nothing to see here")
 }

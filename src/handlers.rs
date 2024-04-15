@@ -8,12 +8,12 @@ use mongodb::Client;
 use serde_json::json;
 
 use crate::{
-  addresses::get_remote_addresses, 
-  common::{build_store_key_from_geo, is_valid_date_string, GeoParams, PostParams},
+  addresses::get_remote_addresses, common::{build_store_key_from_geo, is_valid_date_string, GeoParams, PostParams},
   fetchers::{fetch_pc_zone, fetch_pc_zones, fetch_pcs, update_pc_addresses},
-  geonames::{fetch_poi, fetch_poi_cached, fetch_weather, fetch_weather_cached, fetch_wiki_entries, fetch_wiki_entries_cached},
-  geotime::{get_geotz_data, get_tz_data}, models::{Geo, GeoTimeInfo, LocationInfo, SimplePlace},
-  store::{redis_get_geo_nearby, redis_get_pc_results, redis_get_pc_zones, redis_get_poi, redis_get_weather, redis_get_wiki_summaries, redis_set_geo_nearby, redis_set_pc_results, redis_set_pc_zones, redis_set_poi, redis_set_weather, redis_set_wiki_summaries}
+  geonames::{fetch_poi_cached, fetch_weather_cached, fetch_wiki_entries_cached},
+  geotime::{get_geotz_data, get_tz_data},
+  models::{Geo, GeoTimeInfo, LocationInfo, SimplePlace}, simple_iso::timestamp_from_string, store::{redis_get_geo_nearby, redis_get_pc_results, redis_get_pc_zones, redis_get_poi, redis_get_timezone, redis_set_geo_nearby, redis_set_pc_results, redis_set_pc_zones, redis_set_timezone },
+  astro::get_astro_data
 };
 
 
@@ -58,9 +58,24 @@ pub async fn get_gtz(extract::State(client): extract::State<Client>, query: extr
       let has_zn = gdata.zone_name.is_some();
       let zn_opt = if has_zn { gdata.zone_name.as_deref() } else { None };
       let geo_opt = Some(geo);
-      let time_opt =  get_tz_data(geo_opt, zn_opt, dt_opt.clone().as_deref()).await;
-      if let Some(time) = time_opt {
-        let mut info = GeoTimeInfo::new(gdata, time);
+      let cache_key = format!("tz_info_{}_{}_{}", zn_opt.unwrap_or(""), geo.to_approx_key(3), dt_opt.clone().unwrap_or("a".to_string()));
+      let mut time_opt = redis_get_timezone(&cache_key);
+      let is_cached = time_opt.is_some();
+      if !is_cached {
+        time_opt =  get_tz_data(geo_opt, zn_opt, dt_opt.clone().as_deref()).await;
+      }
+      if let Some(mut time) = time_opt {
+        if is_cached {
+          let ts_opt = if let Some(dt) = dt_opt.clone() {
+            timestamp_from_string(&dt)
+          } else {
+            None
+          };
+          time.update_time(ts_opt);
+        } else {
+          redis_set_timezone(&cache_key, &time);
+        }
+        let mut info = GeoTimeInfo::new(gdata, time);  
         info.set_cached();
         data = Some(info);
       } else {
@@ -222,3 +237,19 @@ pub async fn get_geo_data(extract::State(client): extract::State<Client>, query:
   let response = json!({ "valid": false, "num_updated": num_updated });
   (StatusCode::OK, Json(response))
 } */
+
+pub async fn show_astro_data(query: extract::Query<GeoParams>) -> impl IntoResponse {
+  let geo_opt = query.to_geo_opt();
+  let mut ts_opt: Option<i64> = None;
+  if let Some(dt) = query.dt.clone() {
+    ts_opt = timestamp_from_string(&dt);
+  }
+  let mut response = json!({ "valid": false });
+  if let Some(geo) = geo_opt {
+    let astro_opt = get_astro_data(geo, ts_opt).await;
+    if let Some(astro) = astro_opt {
+      response = json!({ "valid": true, "astro": astro });
+    }
+  }
+  (StatusCode::OK, Json(response))
+} 

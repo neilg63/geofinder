@@ -1,4 +1,8 @@
 use std::collections::HashSet;
+use chrono::DateTime;
+use chrono::Datelike;
+use chrono::SecondsFormat;
+use chrono::Utc;
 use julian_day_converter::*;
 use bson::datetime;
 use serde::{Deserialize, Serialize};
@@ -7,6 +11,7 @@ use bson::{doc, Document};
 use crate::common::natural_tz_offset_from_utc;
 use crate::extractors::*;
 use crate::bson_extractors::*;
+use crate::simple_iso::*;
 
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -254,9 +259,45 @@ impl TzRow {
   pub fn calc_solar_offset(&mut self, lng: f64) {
     self.solar_utc_offset = natural_tz_offset_from_utc(lng);
   }
+
+  pub fn get_next_period_ts(&self) -> i64 {
+    if let Some(period) = self.period {
+      period.start.unwrap_or(0)
+    } else {
+      0
+    }
+  }
+
+  pub fn get_next_period_offset(&self) -> i64 {
+    if let Some(period) = self.period {
+      period.next_gmt_offset.unwrap_or(self.gmt_offset)
+    } else {
+      0
+    }
+  }
+
+  pub fn update_time(&mut self, ts_opt: Option<i64>) {
+    let ref_dt = if let Some(ts_val) = ts_opt {
+      DateTime::from_timestamp(ts_val,0).unwrap_or(Utc::now())
+    } else {
+      Utc::now()
+    };
+    let ts = ref_dt.timestamp();
+    self.ref_unix = ts_opt.unwrap_or(ref_dt.timestamp());
+    self.utc = ref_dt.to_simple_iso();
+    if ts >= self.get_next_period_ts() {
+      self.gmt_offset = self.get_next_period_offset();
+    }
+    let offset_ts = ts + self.gmt_offset;
+    if let Some(lt) = DateTime::from_timestamp(offset_ts,0) {
+      self.local_dt = lt.to_simple_iso();
+      self.week_day = lt.weekday().number_from_monday() as u8;
+    }
+  }
+
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy)]
 pub struct TzPeriod {
   pub start: Option<i64>,
   #[serde(skip_serializing_if = "Option::is_none")]
@@ -786,7 +827,8 @@ pub struct AstroData {
   pub start: i64,
   pub time: i64,
   pub end: i64,
-  pub interval: f64,
+  #[serde(rename="perDay")]
+  pub per_day: u8,
   pub sun: Option<SunData>,
   pub ascendant: Option<AscendantData>,
   pub moon: Option<MoonData>,
@@ -801,12 +843,16 @@ impl AstroData {
     let start: i64 = extract_inner_i64(data, "start", "unix");
     let end: i64 = extract_inner_i64(data, "end", "unix");
     let interval = extract_inner_f64(data, "interval", "days");
-    
+    let per_day = if interval < 1.0 {
+      (1.0 / interval).round() as u8
+    } else {
+      0
+    };
     AstroData {
       start,
       time,
       end,
-      interval,
+      per_day,
       sun,
       moon,
       ascendant

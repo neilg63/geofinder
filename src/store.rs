@@ -45,7 +45,7 @@ pub fn redis_get_geo_nearby(key: &str) -> Option<GeoNearby> {
   redis_get_data::<GeoNearby>(key)
 }
 
-pub fn  redis_set_get_timezone(key: &str, data: &TzRow) -> bool {
+pub fn redis_set_timezone(key: &str, data: &TzRow) -> bool {
   let expiry = 15 * 60;
   redis_set_data::<TzRow>(key, data, expiry)
 }

@@ -13,8 +13,9 @@ mod store;
 mod geotime;
 mod addresses;
 mod geonames;
-
+mod simple_iso;
 mod handlers;
+mod astro;
 
 //use std::io;
 use std::net::SocketAddr;
@@ -46,7 +47,8 @@ use crate::handlers::{
     get_weather_report,
     get_places_of_interest,
     get_nearby_wiki_summaries,
-    get_geo_data
+    get_geo_data,
+    show_astro_data
 };
 
 use crate::db::*;
@@ -77,6 +79,7 @@ async fn main() {
         .route("/places-of-interest", get(get_places_of_interest))
         .route("/wiki-summaries", get(get_nearby_wiki_summaries))
         .route("/geo-codes", post(get_geo_data))
+        .route("/astro", get(show_astro_data))
         // .route("/pc-updates", get(read_pc_zone_updates))
         .layer(CorsLayer::permissive())
         // timeout requests after 10 secs, returning 408 status code
