@@ -757,7 +757,7 @@ pub struct MoonData {
 
 impl MoonData {
   pub fn new(data: &Map<String, Value>) -> Self {
-    let mut positions: Vec<f64> = extract_from_key_f64_values(data, "mo");
+    let positions: Vec<f64> = extract_from_key_f64_values(data, "mo");
     let index = extract_u32_from_value_map(data, "currentIndex") as usize;
     let lng = positions.get(index).map(|v| v.to_owned()).unwrap_or(0.0);
     let mut phase = 0;
@@ -885,7 +885,10 @@ pub struct AstroData {
   pub ascendant: Option<AscendantData>,
   pub moon: Option<MoonData>,
   #[serde(rename="ageSecs",skip_serializing_if = "Option::is_none")]
-  pub age_secs: Option<i64>
+  pub age_secs: Option<i64>,
+  pub cached: bool,
+  #[serde(rename="currentIndex")]
+  pub current_index: u16
 }
 
 impl AstroData {
@@ -903,6 +906,10 @@ impl AstroData {
     } else {
       0
     };
+    let mut current_index = 0;
+    if let Some(mo) = moon.clone() {
+      current_index = (mo.positions.len() / 2) as u16;
+    }
     AstroData {
       start,
       time,
@@ -911,13 +918,16 @@ impl AstroData {
       sun,
       moon,
       ascendant,
-      age_secs: None
+      age_secs: None,
+      cached: false,
+      current_index
     }
   }
 
   pub fn set_age(&mut self) {
     let curr_ts = Utc::now().timestamp();
     self.age_secs = Some(curr_ts - self.time);
+    self.cached = true;
   }
 
 } 
