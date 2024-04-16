@@ -99,6 +99,18 @@ pub fn redis_get_astro_data(key: &str) -> Option<AstroData> {
   redis_get_data::<AstroData>(key)
 }
 
+pub fn redis_set_addresses_checked(pc: &str) -> bool {
+  let expiry = 183 * 24 * 60 * 60;
+  let key = format!("address_check_{}", pc.replace(" ", "_"));
+  redis_set_data::<u8>(&key, &1, expiry)
+}
+
+pub fn redis_addresses_have_been_checked(pc: &str) -> bool {
+  let key = format!("address_check_{}", pc.replace(" ", "_"));
+  let stored = redis_get_data::<u8>(&key);
+  stored.is_some()
+}
+
 pub fn redis_get_data<T>(key: &str) -> Option<T>
   where T: DeserializeOwned + Serialize {
   if let Some(result) = redis_get_opt_string(key) {

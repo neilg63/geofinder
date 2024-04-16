@@ -3,7 +3,7 @@ use std::path::Path;
 use axum::http::{HeaderMap, HeaderValue};
 use reqwest::header::{CONTENT_TYPE, USER_AGENT};
 use serde_json::{Map, Value};
-use crate::{common::{get_addresses_url,is_valid_uk_postcode, read_lines}, extractors::extract_display_strings_from_value_map};
+use crate::{common::{get_addresses_url,is_valid_uk_postcode, read_lines}, extractors::extract_display_strings_from_value_map, store::redis_set_addresses_checked};
 use string_patterns::PatternFilter;
 use rand::prelude::*;
 use crate::store::{redis_get_strings, redis_set_strings};
@@ -78,6 +78,7 @@ pub async fn get_remote_addresses(pc: &str) -> Option<Vec<String>> {
     if let Ok(resp) = result {
       if let Ok(data) = resp.json::<Map<String, Value>>().await {
         if data.contains_key("Data") {
+          redis_set_addresses_checked(pc);
           let addresses = extract_display_strings_from_value_map(&data, "Data");
           let filtered_address = addresses.pattern_filter_ci(&pc_code);
           return Some(filtered_address);

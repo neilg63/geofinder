@@ -13,9 +13,10 @@ use crate::{
   fetchers::{fetch_pc_zone, fetch_pc_zones, fetch_pcs, update_pc_addresses},
   geonames::{fetch_poi_cached, fetch_weather_cached, fetch_wiki_entries_cached},
   geotime::{get_geotz_data, get_tz_data},
-  models::{Geo, GeoTimeInfo, LocationInfo, SimplePlace},
+  models::{Geo, GeoTimeInfo, LocationInfo, PcZone, SimplePlace},
   simple_iso::timestamp_from_string,
   store::{
+    redis_addresses_have_been_checked,
     redis_get_astro_data,
     redis_get_geo_nearby,
     redis_get_pc_results,
@@ -195,6 +196,7 @@ pub async fn get_geo_data(extract::State(client): extract::State<Client>, query:
     let mut geo_data = redis_get_geo_nearby(&ck);
     let mut places: Vec<SimplePlace> = vec![];
     let mut states: Vec<SimplePlace> = vec![];
+    let mut is_uk = false;
     if geo_data.is_none() {
       if let Some(gtz_data)= get_geotz_data(&client, geo, None).await {
         if let Some(place) = gtz_data.place.clone() {
@@ -207,27 +209,35 @@ pub async fn get_geo_data(extract::State(client): extract::State<Client>, query:
       places = geo_item.to_places();
       states = geo_item.to_states();
       pn = geo_item.name.clone();
-    }
-    let limit = 20;
-    let km = 5.0;
-    let ck = build_store_key_from_geo("pzones", geo, Some(km), Some(limit));
-    let mut rows = redis_get_pc_zones(&ck);
-    if rows.len() < 1 {
-      rows = fetch_pc_zones(&client, geo, km, limit).await;
-      if rows.len() > 0 {
-        redis_set_pc_zones(&ck, &rows);
+      if let Some(cc) = geo_item.cc {
+        is_uk = cc.starts_with("GB") || cc.starts_with("UK");
       }
     }
-    if let Some(first) = rows.get_mut(0) {
-      first.add_pn(&pn);
-      if !first.has_addresses() {
-        let pc = first.pc.as_str();
-        let addresses_opt = get_remote_addresses(pc).await;
-        
-        if let Some(addresses) = addresses_opt {
-          update_pc_addresses(&client, pc, &addresses).await;
-          first.add_addresses(&addresses);
+    let mut rows: Vec<PcZone> = vec![];
+    if is_uk {
+      let limit = 7;
+    let km = 15.0;
+    let ck = build_store_key_from_geo("pzones", geo, Some(km), Some(limit));
+      rows = redis_get_pc_zones(&ck);
+      if rows.len() < 1 {
+        rows = fetch_pc_zones(&client, geo, km, limit).await;
+        if rows.len() > 0 {
           redis_set_pc_zones(&ck, &rows);
+        }
+      }
+      if let Some(first) = rows.get_mut(0) {
+        first.add_pn(&pn);
+        if !first.has_addresses() {
+          let pc = first.pc.as_str();
+          let has_been_checked = redis_addresses_have_been_checked(pc);
+          if !has_been_checked {
+            let addresses_opt = get_remote_addresses(pc).await;
+            if let Some(addresses) = addresses_opt {
+              update_pc_addresses(&client, pc, &addresses).await;
+              first.add_addresses(&addresses);
+              redis_set_pc_zones(&ck, &rows);
+            }
+          }
         }
       }
     }
