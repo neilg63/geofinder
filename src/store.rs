@@ -2,7 +2,7 @@
 use redis::{Commands, Connection, RedisResult};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
-use crate::{models::{GeoNearby, PcRow, PcZone, PlaceOfInterest, TzRow, WeatherReport, WikipediaSummary}, store};
+use crate::{models::{AstroData, GeoNearby, PcRow, PcZone, PlaceOfInterest, TzRow, WeatherReport, WikipediaSummary}, store};
 
 pub(crate) fn redis_client() -> RedisResult<Connection> {
   let client = redis::Client::open("redis://127.0.0.1/")?;
@@ -89,6 +89,15 @@ pub fn redis_get_wiki_summaries(key: &str) -> Option<Vec<WikipediaSummary>> {
   redis_get_data::<Vec<WikipediaSummary>>(key)
 }
 
+pub fn redis_set_astro_data(key: &str, data: &AstroData) -> bool {
+  // only 30 minutes
+  let expiry = 30 * 60;
+  redis_set_data::<AstroData>(key, data, expiry)
+}
+
+pub fn redis_get_astro_data(key: &str) -> Option<AstroData> {
+  redis_get_data::<AstroData>(key)
+}
 
 pub fn redis_get_data<T>(key: &str) -> Option<T>
   where T: DeserializeOwned + Serialize {

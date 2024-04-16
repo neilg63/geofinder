@@ -1,4 +1,6 @@
+use core::num;
 use std::collections::HashSet;
+use std::thread::current;
 use chrono::DateTime;
 use chrono::Datelike;
 use chrono::SecondsFormat;
@@ -718,12 +720,39 @@ impl AscendantData {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct MoonPhase {
+  pub num: u8,
+  pub ts: i64
+}
+impl MoonPhase {
+  pub fn new(data: &Map<String, Value>) -> Self {
+    let num_val = extract_u32_from_value_map(data, "num");
+    let num = if num_val < 5 {
+      num_val
+    } else {
+      0
+    } as u8;
+    let jd = extract_f64_from_value_map(data, "jd");
+    let ts = julian_day_converter::julian_day_to_unixtime(jd);
+    MoonPhase {
+      num,
+      ts
+    }
+  }
+
+  pub fn valid(&self) -> bool {
+    self.num > 0
+  }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct MoonData {
   pub lng: f64,
   pub positions: Vec<f64>,
   pub phase: u8,
   pub sun_angle: f64,
   pub waxing: bool,
+  pub phases: Vec<MoonPhase>
 }
 
 impl MoonData {
@@ -734,12 +763,34 @@ impl MoonData {
     let mut phase = 0;
     let mut sun_angle = 0.0;
     let mut waxing = false;
+    let mut phases: Vec<MoonPhase> = vec![];
     if data.contains_key("moon") {
       if let Some(inner) = data.get("moon") {
         if let Some(moon) = inner.as_object() {
           phase = extract_u32_from_value_map(moon, "phase") as u8;
           waxing = extract_bool_from_value_map(moon, "waxing", false);
           sun_angle = extract_f64_from_value_map(moon, "sunAngle");
+          let phases_key = if moon.contains_key("phases") {
+            "phases"
+          } else if moon.contains_key("nextPhases") {
+            "nextPhases"
+          } else {
+            "-"
+          };
+          if phases_key.len() > 1 {
+            if let Some(values) = moon.get(phases_key) {
+              if let Some(items) = values.as_array() {
+                for item in items.into_iter() {
+                  if let Some(obj) = item.as_object() {
+                    let mp = MoonPhase::new(obj);
+                    if mp.valid() {
+                      phases.push(mp);
+                    }
+                  }
+                }
+              }
+            }
+          }
         }
       }
     }
@@ -748,7 +799,8 @@ impl MoonData {
       positions,
       phase,
       sun_angle,
-      waxing
+      waxing,
+      phases
     }
   }
 }
@@ -767,7 +819,7 @@ pub struct SunData {
 
 impl SunData {
   pub fn new(data: &Map<String, Value>) -> Self {
-    let mut positions: Vec<f64> = extract_from_key_f64_values(data, "su");
+    let positions: Vec<f64> = extract_from_key_f64_values(data, "su");
     let index = extract_u32_from_value_map(data, "currentIndex") as usize;
     let lng = positions.get(index).map(|v| v.to_owned()).unwrap_or(0.0);
     let mut rise: Option<i64> = None;
@@ -827,11 +879,13 @@ pub struct AstroData {
   pub start: i64,
   pub time: i64,
   pub end: i64,
-  #[serde(rename="perDay")]
-  pub per_day: u8,
+  #[serde(rename="intervalSecs")]
+  pub interval_secs: u32,
   pub sun: Option<SunData>,
   pub ascendant: Option<AscendantData>,
   pub moon: Option<MoonData>,
+  #[serde(rename="ageSecs",skip_serializing_if = "Option::is_none")]
+  pub age_secs: Option<i64>
 }
 
 impl AstroData {
@@ -842,9 +896,10 @@ impl AstroData {
     let time: i64 = extract_inner_i64(data, "date", "unix");
     let start: i64 = extract_inner_i64(data, "start", "unix");
     let end: i64 = extract_inner_i64(data, "end", "unix");
-    let interval = extract_inner_f64(data, "interval", "days");
-    let per_day = if interval < 1.0 {
-      (1.0 / interval).round() as u8
+    let interval_days = extract_inner_f64(data, "interval", "days");
+    let i_secs_f64 = interval_days * 86400.0;
+    let interval_secs = if i_secs_f64 <= 4_294_967_295.0 && i_secs_f64 >= 0.0 {
+      (i_secs_f64).round() as u32
     } else {
       0
     };
@@ -852,11 +907,17 @@ impl AstroData {
       start,
       time,
       end,
-      per_day,
+      interval_secs,
       sun,
       moon,
-      ascendant
+      ascendant,
+      age_secs: None
     }
+  }
+
+  pub fn set_age(&mut self) {
+    let curr_ts = Utc::now().timestamp();
+    self.age_secs = Some(curr_ts - self.time);
   }
 
 } 

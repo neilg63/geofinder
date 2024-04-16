@@ -8,12 +8,25 @@ use mongodb::Client;
 use serde_json::json;
 
 use crate::{
-  addresses::get_remote_addresses, common::{build_store_key_from_geo, is_valid_date_string, GeoParams, PostParams},
+  addresses::get_remote_addresses, astro::get_astro_data,
+  common::{build_store_key_from_geo, is_valid_date_string, GeoParams, PostParams},
   fetchers::{fetch_pc_zone, fetch_pc_zones, fetch_pcs, update_pc_addresses},
   geonames::{fetch_poi_cached, fetch_weather_cached, fetch_wiki_entries_cached},
   geotime::{get_geotz_data, get_tz_data},
-  models::{Geo, GeoTimeInfo, LocationInfo, SimplePlace}, simple_iso::timestamp_from_string, store::{redis_get_geo_nearby, redis_get_pc_results, redis_get_pc_zones, redis_get_poi, redis_get_timezone, redis_set_geo_nearby, redis_set_pc_results, redis_set_pc_zones, redis_set_timezone },
-  astro::get_astro_data
+  models::{Geo, GeoTimeInfo, LocationInfo, SimplePlace},
+  simple_iso::timestamp_from_string,
+  store::{
+    redis_get_astro_data,
+    redis_get_geo_nearby,
+    redis_get_pc_results,
+    redis_get_pc_zones,
+    redis_get_timezone,
+    redis_set_astro_data,
+    redis_set_geo_nearby,
+    redis_set_pc_results,
+    redis_set_pc_zones,
+    redis_set_timezone
+  }
 };
 
 
@@ -246,10 +259,25 @@ pub async fn show_astro_data(query: extract::Query<GeoParams>) -> impl IntoRespo
   }
   let mut response = json!({ "valid": false });
   if let Some(geo) = geo_opt {
-    let astro_opt = get_astro_data(geo, ts_opt).await;
-    if let Some(astro) = astro_opt {
+  let ts_key = if ts_opt.is_some() {
+    (ts_opt.unwrap_or(0) / 1800).to_string()
+  } else {
+    "c".to_owned()
+  };
+  let key = format!("astro_data_{}_{}", geo.to_approx_key(2), ts_key);
+    let mut astro_opt = redis_get_astro_data(&key);
+    let is_cached = astro_opt.is_some();
+    if !is_cached {
+      astro_opt = get_astro_data(geo, ts_opt).await; 
+    }
+    if let Some(mut astro) = astro_opt {
+      if is_cached {
+        astro.set_age();
+      } else {
+        redis_set_astro_data(&key, &astro);
+      }
       response = json!({ "valid": true, "astro": astro });
     }
   }
   (StatusCode::OK, Json(response))
-} 
+}
