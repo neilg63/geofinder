@@ -214,6 +214,7 @@ pub struct TzRow {
   utc: String,
   #[serde(rename="weekDay")]
   week_day: u8,
+  #[serde(rename="zoneName")]
   zone_name: String,
 }
 
@@ -321,6 +322,29 @@ impl TzPeriod {
   }
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct PlaceRow {
+  pub lat: f64,
+  pub lng: f64,
+  pub text: String,
+  #[serde(rename="zoneName")]
+  pub zone_name: String,
+}
+
+impl PlaceRow {
+  pub fn new(row: &Map<String, Value>) -> PlaceRow {
+    let lat = extract_f64_from_value_map(row, "lat");
+    let lng = extract_f64_from_value_map(row, "lng");
+    let text = extract_string_from_value_map(row, "text");
+    let zone_name = extract_string_from_value_map(row, "zoneName");
+    PlaceRow {
+      lat,
+      lng,
+      text,
+      zone_name
+    }
+  }
+}
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct GeoTimeInfo {

@@ -48,7 +48,8 @@ use crate::handlers::{
     get_places_of_interest,
     get_nearby_wiki_summaries,
     get_geo_data,
-    show_astro_data
+    show_astro_data,
+    show_place_lookup
 };
 
 use crate::db::*;
@@ -80,6 +81,7 @@ async fn main() {
         .route("/wiki-summaries", get(get_nearby_wiki_summaries))
         .route("/geo-codes", post(get_geo_data))
         .route("/astro", get(show_astro_data))
+        .route("/lookup", get(show_place_lookup))
         // .route("/pc-updates", get(read_pc_zone_updates))
         .layer(CorsLayer::permissive())
         // timeout requests after 10 secs, returning 408 status code

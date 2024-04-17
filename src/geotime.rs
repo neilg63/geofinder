@@ -1,6 +1,6 @@
-use serde_json::{Map, Value};
+use serde_json::{Error, Map, Value};
 use mongodb::Client;
-use crate::{common::{get_gtz_url, is_valid_zone_name}, fetchers::get_nearest_pc_info, models::{Geo, GeoNearby, GeoTimeInfo, TzRow}};
+use crate::{common::{get_gtz_url, is_valid_zone_name}, fetchers::get_nearest_pc_info, models::{Geo, GeoNearby, GeoTimeInfo, PlaceRow, TzRow}};
 
 pub async fn get_geotz_data(client: &Client, geo: Geo, date_opt: Option<&str>) -> Option<GeoTimeInfo> {
   let req_client = reqwest::Client::new();
@@ -76,4 +76,46 @@ pub async fn get_tz_data(geo_opt: Option<Geo>, zn_opt: Option<&str>, date_opt: O
     }
   }
   None   
+}
+
+pub async fn get_place_lookup(search: &str, cc_opt: Option<String>, fuzzy_opt: Option<u32>) -> Option<Vec<PlaceRow>> {
+  let client = reqwest::Client::new();
+  let mut query_params = vec![
+    ("place", search),
+  ];
+  let valid = search.len() > 1;
+  let cc_str: String;
+  if let Some(cc) = cc_opt.clone() {
+    if cc.len() == 2 {
+      cc_str = cc;
+      query_params.push(("cc", cc_str.as_str()));
+    }
+  }
+  let fuzzy_str: String;
+  if let Some(fz) = fuzzy_opt {
+    if fz <= 100 {
+      fuzzy_str = fz.to_string().clone();
+      query_params.push(("fuzzy", fuzzy_str.as_str()));
+    }
+  }
+  if valid {
+    let uri = format!("{}/lookup", get_gtz_url());
+    let result = client.get(&uri)
+      .query(&query_params).send()
+      .await
+      .expect("failed to get response")
+      .text()
+      .await;
+    if let Ok(result_string) = result {
+      let results: Result<Vec<Map<String, Value>>, Error> = serde_json::from_str(&result_string);
+      let mut place_rows: Vec<PlaceRow> = Vec::new();
+      if let Ok(rows) = results {
+        for row in rows {
+          place_rows.push(PlaceRow::new(&row));
+        }
+        return Some(place_rows);
+      }
+    }
+  }
+  None
 }

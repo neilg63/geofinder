@@ -6,27 +6,18 @@ use axum::{
 };
 use mongodb::Client;
 use serde_json::json;
+use string_patterns::PatternReplace;
 
 use crate::{
   addresses::get_remote_addresses, astro::get_astro_data,
   common::{build_store_key_from_geo, is_valid_date_string, GeoParams, PostParams},
   fetchers::{fetch_pc_zone, fetch_pc_zones, fetch_pcs, update_pc_addresses},
   geonames::{fetch_poi_cached, fetch_weather_cached, fetch_wiki_entries_cached},
-  geotime::{get_geotz_data, get_tz_data},
-  models::{Geo, GeoTimeInfo, LocationInfo, PcZone, SimplePlace},
+  geotime::{get_geotz_data, get_place_lookup, get_tz_data},
+  models::{Geo, GeoTimeInfo, LocationInfo, PcZone, PlaceRow, SimplePlace},
   simple_iso::timestamp_from_string,
   store::{
-    redis_addresses_have_been_checked,
-    redis_get_astro_data,
-    redis_get_geo_nearby,
-    redis_get_pc_results,
-    redis_get_pc_zones,
-    redis_get_timezone,
-    redis_set_astro_data,
-    redis_set_geo_nearby,
-    redis_set_pc_results,
-    redis_set_pc_zones,
-    redis_set_timezone
+    redis_addresses_have_been_checked, redis_get_astro_data, redis_get_geo_nearby, redis_get_pc_results, redis_get_pc_zones, redis_get_place_rows, redis_get_timezone, redis_set_astro_data, redis_set_geo_nearby, redis_set_pc_results, redis_set_pc_zones, redis_set_place_rows, redis_set_timezone
   }
 };
 
@@ -288,6 +279,48 @@ pub async fn show_astro_data(query: extract::Query<GeoParams>) -> impl IntoRespo
       }
       response = json!({ "valid": true, "astro": astro });
     }
+  }
+  (StatusCode::OK, Json(response))
+}
+
+pub async fn show_place_lookup(query: extract::Query<GeoParams>) -> impl IntoResponse {
+  let search = if let Some(place_str) = query.place.clone() {
+    place_str
+  } else if let Some(search_str) = query.search.clone() {
+    search_str
+  } else {
+    "".to_owned()
+  };
+  let fuzzy_opt = query.fuzzy;
+  let cc_opt = query.cc.clone();
+  let mut response = json!([]);
+  if search.len() > 1 {
+    let mut key_parts = vec!["lookup".to_string(), search.to_lowercase().pattern_replace_ci(r#"\s+"#, "_")];
+    if let Some(cc) = cc_opt.clone() {
+      key_parts.push(cc);
+    }
+    if let Some(fz) = fuzzy_opt.clone() {
+      key_parts.push(fz.to_string());
+    }
+    let cache_key = key_parts.join("_");
+    let rows_opt = redis_get_place_rows(&cache_key);
+    let is_cached = rows_opt.is_some();
+    let mut has_uncached_results = false;
+    let mut rows: Vec<PlaceRow> = Vec::new();
+    if !is_cached {
+      if let Some(results ) = get_place_lookup(&search, cc_opt, fuzzy_opt).await {
+        rows = results;
+        has_uncached_results = true;
+      }
+    } else {
+      if let Some(c_rows) = rows_opt {
+        rows = c_rows;
+      }
+    }
+    if has_uncached_results {
+      redis_set_place_rows(&cache_key, &rows);
+    }
+    response = json!(rows);
   }
   (StatusCode::OK, Json(response))
 }

@@ -62,11 +62,14 @@ pub(crate) fn build_store_key_from_geo(prefix: &str, geo: Geo, radius: Option<f6
 pub struct GeoParams {
   pub loc: Option<String>,
   pub search: Option<String>,
+  pub place: Option<String>,
   pub dt: Option<String>,
   pub km: Option<f64>,
   pub skip: Option<u32>,
   pub limit: Option<u32>,
   pub code: Option<String>,
+  pub fuzzy: Option<u32>,
+  pub cc: Option<String>,
 }
 
 impl GeoParams {

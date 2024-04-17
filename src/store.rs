@@ -2,7 +2,7 @@
 use redis::{Commands, Connection, RedisResult};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
-use crate::{models::{AstroData, GeoNearby, PcRow, PcZone, PlaceOfInterest, TzRow, WeatherReport, WikipediaSummary}, store};
+use crate::{models::{AstroData, GeoNearby, PcRow, PcZone, PlaceOfInterest, PlaceRow, TzRow, WeatherReport, WikipediaSummary}, store};
 
 pub(crate) fn redis_client() -> RedisResult<Connection> {
   let client = redis::Client::open("redis://127.0.0.1/")?;
@@ -97,6 +97,16 @@ pub fn redis_set_astro_data(key: &str, data: &AstroData) -> bool {
 
 pub fn redis_get_astro_data(key: &str) -> Option<AstroData> {
   redis_get_data::<AstroData>(key)
+}
+
+pub fn redis_set_place_rows(key: &str, data: &Vec<PlaceRow>) -> bool {
+  // store for a month
+  let expiry = 30 * 24 * 60 * 60;
+  redis_set_data::<Vec<PlaceRow>>(key, data, expiry)
+}
+
+pub fn redis_get_place_rows(key: &str) -> Option<Vec<PlaceRow>> {
+  redis_get_data::<Vec<PlaceRow>>(key)
 }
 
 pub fn redis_set_addresses_checked(pc: &str) -> bool {
