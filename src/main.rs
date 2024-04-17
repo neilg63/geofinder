@@ -85,9 +85,9 @@ async fn main() {
         .route("/astro", get(show_astro_data))
         .route("/lookup", get(show_place_lookup))
         // .route("/pc-updates", get(read_pc_zone_updates))
-        .layer(CorsLayer::permissive())
+        // .layer(CorsLayer::permissive()) // handle in nginx
         // timeout requests after 10 secs, returning 408 status code
-        .layer(TimeoutLayer::new(Duration::from_secs(10)))
+        .layer(TimeoutLayer::new(Duration::from_secs(15)))
         // don't allow request bodies larger than 1024 bytes, returning 413 status code
         .layer(RequestBodyLimitLayer::new(1024))
         .layer(TraceLayer::new_for_http())
