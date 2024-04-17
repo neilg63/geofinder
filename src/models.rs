@@ -1,12 +1,8 @@
-use core::num;
 use std::collections::HashSet;
-use std::thread::current;
 use chrono::DateTime;
 use chrono::Datelike;
-use chrono::SecondsFormat;
 use chrono::Utc;
 use julian_day_converter::*;
-use bson::datetime;
 use serde::{Deserialize, Serialize};
 use serde_json::*;
 use bson::{doc, Document};

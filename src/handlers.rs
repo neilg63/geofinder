@@ -98,7 +98,7 @@ pub async fn get_gtz(extract::State(client): extract::State<Client>, query: extr
     }
     
     let response = json!(data);
-    (StatusCode::NOT_ACCEPTABLE, Json(response))
+    (StatusCode::OK, Json(response))
   } else {
     let response = json!({ "valid": false });
     (StatusCode::NOT_ACCEPTABLE, Json(response))
