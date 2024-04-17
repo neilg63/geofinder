@@ -49,7 +49,8 @@ use crate::handlers::{
     get_nearby_wiki_summaries,
     get_geo_data,
     show_astro_data,
-    show_place_lookup
+    show_place_lookup,
+    show_timezone
 };
 
 use crate::db::*;
@@ -75,6 +76,7 @@ async fn main() {
         .route("/", get(welcome))
         .route("/postcodes", get(get_nearest_pcs))
         .route("/gtz", get(get_gtz))
+        .route("/timezone", get(show_timezone))
         .route("/addresses", post(fetch_and_update_addresses))
         .route("/weather", get(get_weather_report))
         .route("/places-of-interest", get(get_places_of_interest))

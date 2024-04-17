@@ -216,6 +216,7 @@ pub struct TzRow {
   week_day: u8,
   #[serde(rename="zoneName")]
   zone_name: String,
+  valid: bool
 }
 
 impl TzRow {
@@ -244,6 +245,7 @@ impl TzRow {
       }
     };
     let zone_name = extract_string_from_value_map(&row, "zoneName");
+    let valid = zone_name.clone().contains("/");
     TzRow {
       abbreviation,
       country_code,
@@ -255,7 +257,8 @@ impl TzRow {
       ref_unix,
       solar_utc_offset,
       week_day,
-      zone_name
+      zone_name,
+      valid
     }
   }
 

@@ -324,3 +324,42 @@ pub async fn show_place_lookup(query: extract::Query<GeoParams>) -> impl IntoRes
   }
   (StatusCode::OK, Json(response))
 }
+
+pub async fn show_timezone(query: extract::Query<GeoParams>) -> impl IntoResponse {
+  let mut status = StatusCode::NOT_ACCEPTABLE;
+  let mut response = json!({"valid": false });
+  if let Some(geo) = query.to_geo_opt() {
+    let mut dt_opt: Option<String> = None;
+     // Clone query.dt outside the inner if let block
+     let dt = query.dt.clone();
+     if let Some(ds) = dt {
+         if is_valid_date_string(&ds) {
+             dt_opt = Some(ds); // Assign ds directly, not as a reference
+         }
+    }
+    let zn_opt = query.zn.clone();
+    let zn_key = zn_opt.clone().unwrap_or("".to_owned());
+    let geo_opt = Some(geo);
+    let cache_key = format!("tz_info_{}_{}_{}", zn_key, geo.to_approx_key(3), dt_opt.clone().unwrap_or("a".to_string()));
+    let mut time_opt = redis_get_timezone(&cache_key);
+    let is_cached = time_opt.is_some();
+    if !is_cached {
+      time_opt =  get_tz_data(geo_opt, zn_opt.as_deref(), dt_opt.clone().as_deref()).await;
+    }
+    if let Some(mut time) = time_opt {
+      if is_cached {
+        let ts_opt = if let Some(dt) = dt_opt.clone() {
+          timestamp_from_string(&dt)
+        } else {
+          None
+        };
+        time.update_time(ts_opt);
+      } else {
+        redis_set_timezone(&cache_key, &time);
+      }
+      status = StatusCode::OK;
+      response = json!(time);
+    }
+  }
+  (status, Json(response))
+}
