@@ -71,6 +71,7 @@ pub struct GeoParams {
   pub fuzzy: Option<u32>,
   pub cc: Option<String>,
   pub zn: Option<String>,
+  pub astro: Option<u8>,
 }
 
 impl GeoParams {

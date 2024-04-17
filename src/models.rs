@@ -351,6 +351,8 @@ pub struct GeoTimeInfo {
   pub place: Option<GeoNearby>,
   #[serde(skip_serializing_if = "Option::is_none")]
   pub time: Option<TzRow>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub astro: Option<AstroData>,
   pub cached: bool,
   pub valid: bool,
 }
@@ -360,6 +362,7 @@ impl GeoTimeInfo {
     GeoTimeInfo {
       place: Some(place),
       time: Some(time),
+      astro: None,
       cached: false,
       valid: true
     }
@@ -369,6 +372,7 @@ impl GeoTimeInfo {
     GeoTimeInfo {
       place: Some(place),
       time: None,
+      astro: None,
       cached: false,
       valid: true
     }
@@ -380,6 +384,10 @@ impl GeoTimeInfo {
 
   pub fn set_time(&mut self, time: TzRow) {
     self.time = Some(time);
+  }
+
+  pub fn set_astro(&mut self, astro: AstroData) {
+    self.astro = Some(astro);
   }
 
 }
@@ -773,6 +781,7 @@ pub struct MoonData {
   pub lng: f64,
   pub positions: Vec<f64>,
   pub phase: u8,
+  #[serde(rename="sunAngle")]
   pub sun_angle: f64,
   pub waxing: bool,
   pub phases: Vec<MoonPhase>
