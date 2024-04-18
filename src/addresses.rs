@@ -79,7 +79,8 @@ pub async fn get_remote_addresses(pc: &str) -> Option<Vec<String>> {
         if data.contains_key("Data") {
           redis_set_addresses_checked(pc);
           let addresses = extract_display_strings_from_value_map(&data, "Data");
-          let filtered_address = addresses.pattern_filter_ci(&pc_code);
+          let pc_pat = format!("^{}", pc_code.replace(" ", r#"\s+"#));
+          let filtered_address = addresses.pattern_filter_ci(&pc_pat);
           return Some(filtered_address);
         }
       }
