@@ -1,3 +1,4 @@
+use std::{thread, time};
 use axum::{
   extract,
   http::StatusCode,
@@ -131,6 +132,49 @@ pub async fn fetch_and_update_addresses(extract::State(client): extract::State<C
       let response = json!(pc_zone);
       return (StatusCode::OK, Json(response));
     } 
+  } else if query.has_geo() {
+    let mut interval = time::Duration::from_millis(500);
+    let km_val = query.km.unwrap_or(2.0);
+    let km = if km_val > 20.0 {
+      20.0
+    } else {
+      km_val
+    };
+    let limit_val = query.limit.unwrap_or(10);
+    let limit = if limit_val > 50 {
+      50
+    } else {
+      limit_val
+    };
+    let lat = query.lat.unwrap_or(0.0);
+    let lng = query.lng.unwrap_or(0.0);
+    if lat > 49.0 && lng < 1.8 && lng > -10.0 {
+      let geo = Geo::simple(lat, lng);
+      let mut rows = fetch_pc_zones(&client, geo, km, limit).await;
+      let mut updated = 0;
+      let mut counter = 0;
+      for pc_zone in rows.iter_mut() {
+        if !pc_zone.has_addresses() {
+          let addresses_opt = get_remote_addresses(&pc_zone.pc).await;
+          if let Some(addresses) = addresses_opt {
+            if addresses.len() > 0 {
+              update_pc_addresses(&client, &pc_zone.pc, &addresses).await;
+              pc_zone.add_addresses(&addresses);
+              updated += 1;
+            }
+          }
+          if counter > 20 {
+            interval = time::Duration::from_millis(2000);
+          } else if counter > 10 {
+            interval = time::Duration::from_millis(1000);
+          }
+          thread::sleep(interval);
+          counter += 0;
+        }
+      }
+      let response = json!({"rows": rows, "numUpdated": updated});
+      return (StatusCode::OK, Json(response));
+    }
   }
   let response = json!({ "valid": false });
   (StatusCode::NOT_ACCEPTABLE, Json(response))

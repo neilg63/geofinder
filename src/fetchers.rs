@@ -55,9 +55,9 @@ pub async fn fetch_record(client: &Client, coll_name: &str,
     result
 }
 
-pub async fn fetch_records(client: &Client, coll_name: &str, filter_options: Option<Document>, fields: Option<Vec<&str>>) -> Vec<Document> {
+/* pub async fn fetch_records(client: &Client, coll_name: &str, filter_options: Option<Document>, fields: Option<Vec<&str>>) -> Vec<Document> {
     find_records(client, coll_name, 0, 0, filter_options, fields).await
-}
+} */
 
 pub async fn update_record(client: &Client, coll_name: &str, filter_options: &Document, values: &Document) -> bool {
   let update = doc ! { "$set": values.to_owned() };
@@ -204,9 +204,9 @@ pub async fn fetch_pc_zone(client: &Client, pc: &str) -> Option<PcZone> {
   result.map(|item| PcZone::new(&item))
 }
 
-fn extract_string_from_vec(vals: &Vec<String>, index: usize) -> String {
+/* fn extract_string_from_vec(vals: &Vec<String>, index: usize) -> String {
   vals.get(index).unwrap_or(&"".to_string()).to_owned()
-}
+} */
 
 /* 
 pub async fn get_update_lines(client: &Client) -> usize {

@@ -63,7 +63,6 @@ pub async fn get_remote_addresses(pc: &str) -> Option<Vec<String>> {
   let client = reqwest::Client::new();
   let pc_code = pc.trim().to_uppercase();
   let valid = is_valid_uk_postcode(&pc_code);
-  
   if valid {
     let mut map = HashMap::new();    
     map.insert("Query", pc_code.clone());

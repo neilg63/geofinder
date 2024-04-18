@@ -108,6 +108,12 @@ pub struct PostParams {
   pub code: Option<String>,
 }
 
+impl PostParams {
+  pub fn has_geo(&self) -> bool {
+    self.lat.is_some() && self.lng.is_some()
+  }
+}
+
 pub fn is_valid_date_string(dt_str: &str) -> bool {
   dt_str.pattern_match_cs(r#"^\d\d\d\d-[01]\d-[0-3]\d"#)
 }
@@ -117,7 +123,7 @@ pub fn is_valid_zone_name(dt_str: &str) -> bool {
 }
 
 pub fn is_valid_uk_postcode(dt_str: &str) -> bool {
-  dt_str.pattern_match_cs(r#"^[A-Z]+\d\s\d"#)
+  dt_str.pattern_match_cs(r#"^[A-Z]+\d+[A-Z]?\s+\d"#)
 }
 
 pub fn natural_tz_offset_from_utc(lng: f64) -> i64 {
