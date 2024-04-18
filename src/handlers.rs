@@ -123,10 +123,14 @@ pub async fn fetch_and_update_addresses(extract::State(client): extract::State<C
     let pc_zone_opt = fetch_pc_zone(&client, &pc).await;
     if let Some(mut pc_zone) = pc_zone_opt {
       if !pc_zone.has_addresses() {
-        let addresses_opt = get_remote_addresses(&pc).await;
-        if let Some(addresses) = addresses_opt {
-          update_pc_addresses(&client, &pc, &addresses).await;
-          pc_zone.add_addresses(&addresses);
+        let has_been_checked = redis_addresses_have_been_checked(&pc);
+        if !has_been_checked {
+          let addresses_opt = get_remote_addresses(&pc).await;
+          if let Some(addresses) = addresses_opt {
+            update_pc_addresses(&client, &pc, &addresses).await;
+            pc_zone.add_addresses(&addresses);
+          }
+          
         }
       }
       let response = json!(pc_zone);
@@ -155,21 +159,25 @@ pub async fn fetch_and_update_addresses(extract::State(client): extract::State<C
       let mut counter = 0;
       for pc_zone in rows.iter_mut() {
         if !pc_zone.has_addresses() {
-          let addresses_opt = get_remote_addresses(&pc_zone.pc).await;
-          if let Some(addresses) = addresses_opt {
-            if addresses.len() > 0 {
-              update_pc_addresses(&client, &pc_zone.pc, &addresses).await;
-              pc_zone.add_addresses(&addresses);
-              updated += 1;
+          let pc = pc_zone.pc.clone();
+          let has_been_checked = redis_addresses_have_been_checked(&pc);
+          if !has_been_checked {
+            let addresses_opt = get_remote_addresses(&pc).await;
+            if let Some(addresses) = addresses_opt {
+              if addresses.len() > 0 {
+                update_pc_addresses(&client, &pc, &addresses).await;
+                pc_zone.add_addresses(&addresses);
+                updated += 1;
+              }
             }
+            if counter > 20 {
+              interval = time::Duration::from_millis(2000);
+            } else if counter > 10 {
+              interval = time::Duration::from_millis(1000);
+            }
+            thread::sleep(interval);
+            counter += 0;
           }
-          if counter > 20 {
-            interval = time::Duration::from_millis(2000);
-          } else if counter > 10 {
-            interval = time::Duration::from_millis(1000);
-          }
-          thread::sleep(interval);
-          counter += 0;
         }
       }
       let response = json!({"rows": rows, "numUpdated": updated});
