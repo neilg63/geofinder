@@ -85,6 +85,13 @@ impl GeoNearby {
     ]
   }
 
+  pub fn is_near_populated_land(&self) -> bool {
+    if self.lat > -59.0 && self.lat < 78.0 {
+      return self.fcode.starts_with("P") || self.fcode.starts_with("A");
+    }
+    false
+  }
+
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -395,7 +402,6 @@ impl GeoTimeInfo {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PcZone {
   pub pc: String,
-  #[serde(skip_serializing_if = "Vec::is_empty")]
   addresses: Vec<String>,
   lat: f64,
   lng: f64,
@@ -455,6 +461,41 @@ impl PcZone {
       dist,
       modified_at,
       pn: None
+    }
+  }
+
+  pub fn from_geonames(row: Map<String, Value>) -> Self {
+    let pc = extract_string_from_value_map(&row, "postalCode");
+    let lng = extract_f64_from_value_map(&row, "lng");
+    let lat = extract_f64_from_value_map(&row, "lat");
+    let dist = extract_f64_from_value_map(&row, "distance");
+    let place_name = extract_string_from_value_map(&row, "placeName").trim().to_string();
+    let c = extract_string_from_value_map(&row, "countryCode").trim().to_string();
+    let cy = extract_string_from_value_map(&row, "adminName1");
+    let d = extract_string_from_value_map(&row, "adminName2");
+    let w = extract_string_from_value_map(&row, "adminName3");
+    let lt = chrono::offset::Local::now();
+    let  modified_at = lt.to_simple_iso();
+    let addresses:Vec<String> = vec![];
+    PcZone { 
+        pc,
+        addresses,
+        lat,
+        lng,
+        alt: 20.0,
+        n: 0.0,
+        e: 0.0,
+        c,
+        d,
+        lc: place_name.clone(),
+        cy,
+        w,
+        cs: "".to_string(),
+        wc: "".to_string(),
+        gr: "".to_string(),
+        dist,
+        modified_at,
+        pn: Some(place_name)
     }
   }
 
@@ -551,6 +592,27 @@ pub fn build_pois(data: Map<String, Value>) -> Vec<PlaceOfInterest> {
         new_rows
       },
       _ => Vec::new(),
+    };
+  }
+  rows
+}
+
+pub fn build_postcodes(data: Map<String, Value>) -> Vec<PcZone> {
+  let mut rows:Vec<PcZone> = vec![];
+  if data.contains_key("postalCodes") {
+    match &data["postalCodes"] {
+      Value::Array(items) => {
+        for row in items {
+          match row {
+            Value::Object(row_map) => {
+              let new_row = PcZone::from_geonames(row_map.clone());
+              rows.push(new_row);
+            },
+            _ => ()
+          }
+        }
+      },
+      _ => {}
     };
   }
   rows
@@ -676,6 +738,7 @@ pub struct LocationInfo {
   #[serde(rename="hasPCs")]
   pub has_pcs: bool,
   pub num: u32,
+  #[serde(skip_serializing_if = "Option::is_none")]
   pub zone: Option<PcZone>,
   pub places: Vec<SimplePlace>,
   pub states: Vec<SimplePlace>,
@@ -740,7 +803,7 @@ pub struct AscendantData {
 
 impl AscendantData {
   pub fn new(data: &Map<String, Value>) -> Self {
-    let mut positions: Vec<f64> = extract_from_key_f64_values(data, "as");
+    let positions: Vec<f64> = extract_from_key_f64_values(data, "as");
     let index = extract_u32_from_value_map(data, "currentIndex") as usize;
     let lng = positions.get(index).map(|v| v.to_owned()).unwrap_or(0.0);
     AscendantData  {

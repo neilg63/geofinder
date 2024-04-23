@@ -80,6 +80,15 @@ pub fn redis_get_poi(key: &str) -> Option<Vec<PlaceOfInterest>> {
   redis_get_data::<Vec<PlaceOfInterest>>(key)
 }
 
+pub fn  redis_set_postcodes(key: &str, data: &Vec<PcZone>) -> bool {
+  let expiry = 31 * 24 * 60 * 60;
+  redis_set_data::<Vec<PcZone>>(key, data, expiry)
+}
+
+pub fn redis_get_postcodes(key: &str) -> Option<Vec<PcZone>> {
+  redis_get_data::<Vec<PcZone>>(key)
+}
+
 pub fn  redis_set_wiki_summaries(key: &str, data: &Vec<WikipediaSummary>) -> bool {
   let expiry = 3 * 31 * 24 * 60 * 60;
   redis_set_data::<Vec<WikipediaSummary>>(key, data, expiry)
@@ -109,16 +118,24 @@ pub fn redis_get_place_rows(key: &str) -> Option<Vec<PlaceRow>> {
   redis_get_data::<Vec<PlaceRow>>(key)
 }
 
-pub fn redis_set_addresses_checked(pc: &str) -> bool {
-  let expiry = 183 * 24 * 60 * 60;
-  let key = format!("address_check_{}", pc.replace(" ", "_"));
+pub fn redis_set_data_checked(key: &str, days: usize) -> bool {
+  let expiry = days * 24 * 60 * 60;
   redis_set_data::<u8>(&key, &1, expiry)
+}
+
+pub fn redis_data_have_been_checked(key: &str) -> bool {
+  let stored = redis_get_data::<u8>(&key);
+  stored.is_some()
+}
+
+pub fn redis_set_addresses_checked(pc: &str) -> bool {
+  let key = format!("address_check_{}", pc.replace(" ", "_"));
+  redis_set_data_checked(&key, 183)
 }
 
 pub fn redis_addresses_have_been_checked(pc: &str) -> bool {
   let key = format!("address_check_{}", pc.replace(" ", "_"));
-  let stored = redis_get_data::<u8>(&key);
-  stored.is_some()
+  redis_data_have_been_checked(&key)
 }
 
 pub fn redis_get_data<T>(key: &str) -> Option<T>

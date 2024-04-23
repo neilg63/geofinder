@@ -13,12 +13,12 @@ use crate::{
   addresses::get_remote_addresses, astro::{self, get_astro_data_cached},
   common::{build_store_key_from_geo, is_valid_date_string, GeoParams, PostParams},
   fetchers::{fetch_pc_zone, fetch_pc_zones, fetch_pcs, update_pc_addresses},
-  geonames::{fetch_poi_cached, fetch_weather_cached, fetch_wiki_entries_cached},
+  geonames::{fetch_poi_cached, fetch_postcodes, fetch_weather_cached, fetch_wiki_entries_cached},
   geotime::{get_geotz_data, get_place_lookup, get_tz_data},
   models::{Geo, GeoTimeInfo, LocationInfo, PcZone, PlaceRow, SimplePlace},
   simple_iso::timestamp_from_string,
   store::{
-    redis_addresses_have_been_checked, redis_get_geo_nearby, redis_get_pc_results, redis_get_pc_zones, redis_get_place_rows, redis_get_timezone, redis_set_astro_data, redis_set_geo_nearby, redis_set_pc_results, redis_set_pc_zones, redis_set_place_rows, redis_set_timezone
+    redis_addresses_have_been_checked, redis_data_have_been_checked, redis_get_geo_nearby, redis_get_pc_results, redis_get_pc_zones, redis_get_place_rows, redis_get_timezone, redis_set_astro_data, redis_set_data_checked, redis_set_geo_nearby, redis_set_pc_results, redis_set_pc_zones, redis_set_place_rows, redis_set_timezone
   }
 };
 
@@ -251,6 +251,7 @@ pub async fn get_geo_data(extract::State(client): extract::State<Client>, query:
     let mut places: Vec<SimplePlace> = vec![];
     let mut states: Vec<SimplePlace> = vec![];
     let mut is_uk = false;
+    let mut is_near_pop_land = false;
     if geo_data.is_none() {
       if let Some(gtz_data)= get_geotz_data(&client, geo, None).await {
         if let Some(place) = gtz_data.place.clone() {
@@ -262,40 +263,56 @@ pub async fn get_geo_data(extract::State(client): extract::State<Client>, query:
     if let Some(geo_item) = geo_data {
       places = geo_item.to_places();
       states = geo_item.to_states();
+      is_near_pop_land = geo_item.is_near_populated_land();
       pn = geo_item.name.clone();
       if let Some(cc) = geo_item.cc {
         is_uk = cc.starts_with("GB") || cc.starts_with("UK");
       }
     }
-    let mut rows: Vec<PcZone> = vec![];
-    if is_uk {
-      let limit = 7;
+    let limit = 7;
     let km = 15.0;
     let ck = build_store_key_from_geo("pzones", geo, Some(km), Some(limit));
-      rows = redis_get_pc_zones(&ck);
-      if rows.len() < 1 {
+    let mut rows: Vec<PcZone> = redis_get_pc_zones(&ck);
+    let mut pc_cache_set = false;
+    if rows.len() < 1 {
+      if is_uk {
         rows = fetch_pc_zones(&client, geo, km, limit).await;
         if rows.len() > 0 {
           redis_set_pc_zones(&ck, &rows);
         }
-      }
-      if let Some(first) = rows.get_mut(0) {
-        first.add_pn(&pn);
-        if !first.has_addresses() {
-          let pc = first.pc.as_str();
-          let has_been_checked = redis_addresses_have_been_checked(pc);
+        if let Some(first) = rows.get_mut(0) {
+          first.add_pn(&pn);
+          if !first.has_addresses() {
+            let pc = first.pc.as_str();
+            let has_been_checked = redis_addresses_have_been_checked(pc);
+            if !has_been_checked {
+              let addresses_opt = get_remote_addresses(pc).await;
+              if let Some(addresses) = addresses_opt {
+                update_pc_addresses(&client, pc, &addresses).await;
+                first.add_addresses(&addresses);
+                redis_set_pc_zones(&ck, &rows);
+                pc_cache_set = true;
+              }
+            }
+          }
+          if !pc_cache_set {
+            redis_set_pc_zones(&ck, &rows);
+          }
+        }
+      } else {
+        if is_near_pop_land {
+          let check_key = build_store_key_from_geo("gn_pc_checked_", geo, None, None);
+          let has_been_checked = redis_data_have_been_checked(&check_key);
           if !has_been_checked {
-            let addresses_opt = get_remote_addresses(pc).await;
-            if let Some(addresses) = addresses_opt {
-              update_pc_addresses(&client, pc, &addresses).await;
-              first.add_addresses(&addresses);
+            if let Some(matched_rows) = fetch_postcodes(geo).await {
+              rows = matched_rows;
+              redis_set_data_checked(&check_key, 30);
               redis_set_pc_zones(&ck, &rows);
             }
           }
         }
       }
     }
-    
     let (weather, _weather_cached) = fetch_weather_cached(geo).await;
     let (poi_opt, _poi_cached) = fetch_poi_cached(geo).await;
     let poi = poi_opt.unwrap_or(vec![]);

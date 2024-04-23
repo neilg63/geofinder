@@ -1,4 +1,4 @@
-use crate::{common::get_geonames_username, models::{build_pois, build_wiki_summaries, Geo, PlaceOfInterest, WeatherReport, WikipediaSummary}, store::{redis_get_poi, redis_get_weather, redis_get_wiki_summaries, redis_set_poi, redis_set_weather, redis_set_wiki_summaries}};
+use crate::{common::get_geonames_username, models::{build_pois, build_postcodes, build_wiki_summaries, Geo, PcZone, PlaceOfInterest, WeatherReport, WikipediaSummary}, store::{redis_get_poi, redis_get_postcodes, redis_get_weather, redis_get_wiki_summaries, redis_set_poi, redis_set_postcodes, redis_set_weather, redis_set_wiki_summaries}};
 use serde_json::*;
 
 pub const GEONAMES_BASE_URI: &'static str = "http://api.geonames.org";
@@ -134,4 +134,11 @@ pub async fn fetch_wiki_entries_cached(geo: Geo) -> (Option<Vec<WikipediaSummary
     }
   }
   (items_opt, cached)
+}
+
+pub async fn fetch_postcodes(geo: Geo) -> Option<Vec<PcZone>> {
+  if let Some(data) =  fetch_from_geonames(geo, GeoNamesService::Postcode).await {
+    return Some(build_postcodes(data));
+  }
+  None
 }
