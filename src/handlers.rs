@@ -318,6 +318,9 @@ pub async fn get_geo_data(extract::State(client): extract::State<Client>, query:
     let poi = poi_opt.unwrap_or(vec![]);
     let (wiki_items_opt, _wiki_cached) = fetch_wiki_entries_cached(geo).await;
     let wikipedia = wiki_items_opt.unwrap_or(vec![]);
+    if is_uk && rows.len() > 0 {
+      rows = rows.iter_mut().map(|row| row.clean_addresses()).collect();
+    }
     let result = LocationInfo::new(rows, places, states, weather, poi, wikipedia);
     let response = json!(result);
     return (StatusCode::OK, Json(response));

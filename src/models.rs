@@ -6,6 +6,7 @@ use julian_day_converter::*;
 use serde::{Deserialize, Serialize};
 use serde_json::*;
 use bson::{doc, Document};
+use string_patterns::PatternReplace;
 use crate::common::natural_tz_offset_from_utc;
 use crate::extractors::*;
 use crate::bson_extractors::*;
@@ -505,6 +506,13 @@ impl PcZone {
 
   pub fn add_addresses(&mut self, addresses: &[String]) {
     self.addresses = addresses.to_vec();
+  }
+
+  pub fn clean_addresses(&mut self) -> Self {
+    if self.has_addresses() {
+      self.addresses = self.addresses.pattern_replace_cs(r#"^.*?,\s*([^,]{8,100})$"#, "$1");
+    }
+    self.to_owned()
   }
 
   pub fn add_pn(&mut self, place_name: &str) {
