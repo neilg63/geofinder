@@ -37,14 +37,14 @@ pub async fn welcome() -> &'static str {
 }
 
 // basic handler that responds with statuc JSON
-pub async fn unauthorized() -> Value {
+/* pub async fn unauthorized() -> Value {
     json!({
       "valid": false,
       "message": "Unauthorized"
     })
-}
+} */
 
-pub(crate) fn build_store_key_from_geo(prefix: &str, geo: Geo, radius: Option<f64>, limit: Option<u32>) -> String {
+pub(crate) fn build_store_key_from_geo(prefix: &str, geo: Geo, radius: Option<f64>, limit: Option<u32>, precision: u8) -> String {
   let mut extras: Vec<String> = Vec::new();
   if let Some(rv) = radius {
     extras.push(format!("_{:2}", rv).strip_by_type(CharType::Spaces));
@@ -53,8 +53,9 @@ pub(crate) fn build_store_key_from_geo(prefix: &str, geo: Geo, radius: Option<f6
     extras.push(format!("_{}", lv).strip_by_type(CharType::Spaces));
   }
   let extra = if extras.len() > 0 { extras.concat().trim().to_owned() } else { "".to_owned() };
-  let g_c = format!("{:5}_{:5}",geo.lat,geo.lng);
-  format!("{}_{}{}", prefix, g_c, extra)
+  let lat_s = format!("{:.1$}", geo.lat, precision as usize);
+  let lng_s = format!("{:.1$}", geo.lng, precision as usize);
+  format!("{}_{}_{}{}", prefix, lat_s, lng_s, extra)
 }
 
 #[skip_serializing_none]

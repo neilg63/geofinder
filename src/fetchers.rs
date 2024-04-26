@@ -174,7 +174,7 @@ pub async fn fetch_pc_zones(client: &Client, geo: Geo, km: f64, limit: u32) -> V
 }
 
 pub async fn get_nearest_pc_info(client: &Client, geo: Geo) -> Option<PcInfo> {
-  let ck = build_store_key_from_geo("pc", geo, Some(15.0), Some(1));
+  let ck = build_store_key_from_geo("pc", geo, Some(15.0), Some(1), 6);
   let mut rows = redis_get_pc_results(&ck);
   let mut info: Option<PcInfo> = None;
   if rows.len() < 1 {

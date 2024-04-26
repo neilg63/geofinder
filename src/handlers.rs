@@ -27,7 +27,7 @@ pub async fn get_nearest_pcs(extract::State(client): extract::State<Client>, que
   if let Some(geo) = query.to_geo_opt() {
     let km = query.km.unwrap_or(10.0);
     let limit = query.limit.unwrap_or(10);
-    let ck = build_store_key_from_geo("pc", geo, Some(km), Some(limit));
+    let ck = build_store_key_from_geo("pc", geo, Some(km), Some(limit), 6);
     let mut rows = redis_get_pc_results(&ck);
     let mut cached = false;
     if rows.len() < 1 {
@@ -57,7 +57,7 @@ pub async fn get_gtz(extract::State(client): extract::State<Client>, query: extr
              dt_opt = Some(ds); // Assign ds directly, not as a reference
          }
     }
-    let ck = build_store_key_from_geo("place", geo, None, None);
+    let ck = build_store_key_from_geo("place", geo, None, None, 5);
     let mut data: Option<GeoTimeInfo> = None;
     let geo_data = redis_get_geo_nearby(&ck);
     if let Some(gdata) = geo_data {
@@ -245,7 +245,7 @@ pub async fn get_nearby_wiki_summaries(query: extract::Query<GeoParams>) -> impl
 pub async fn get_geo_data(extract::State(client): extract::State<Client>, query: extract::Json<PostParams>) -> impl IntoResponse {
   if let Some(lat) = query.lat {
     let geo = Geo::new(lat, query.lng.unwrap_or(0.0), 10.0);
-    let ck = build_store_key_from_geo("place", geo, None, None);
+    let ck = build_store_key_from_geo("place", geo, None, None, 5);
     let mut pn = "".to_string();
     let mut geo_data = redis_get_geo_nearby(&ck);
     let mut places: Vec<SimplePlace> = vec![];
@@ -271,7 +271,7 @@ pub async fn get_geo_data(extract::State(client): extract::State<Client>, query:
     }
     let limit = 7;
     let km = 15.0;
-    let ck = build_store_key_from_geo("pzones", geo, Some(km), Some(limit));
+    let ck = build_store_key_from_geo("pzones", geo, Some(km), Some(limit), 7);
     let mut rows: Vec<PcZone> = redis_get_pc_zones(&ck);
     let mut pc_cache_set = false;
     if rows.len() < 1 {
@@ -301,7 +301,7 @@ pub async fn get_geo_data(extract::State(client): extract::State<Client>, query:
         }
       } else {
         if is_near_pop_land {
-          let check_key = build_store_key_from_geo("gn_pc_checked_", geo, None, None);
+          let check_key = build_store_key_from_geo("gn_pc_checked_", geo, None, None,7);
           let has_been_checked = redis_data_have_been_checked(&check_key);
           if !has_been_checked {
             if let Some(matched_rows) = fetch_postcodes(geo).await {
