@@ -14,7 +14,7 @@ use crate::{
   common::{build_store_key_from_geo, is_valid_date_string, GeoParams, PostParams},
   fetchers::{fetch_pc_zone, fetch_pc_zones, fetch_pcs, update_pc_addresses},
   geonames::{fetch_poi_cached, fetch_postcodes, fetch_weather_cached, fetch_wiki_entries_cached},
-  geotime::{get_geotz_data, get_place_lookup, get_tz_data},
+  geotime::{build_pc_zones_from_geo_info, get_geotz_data, get_place_lookup, get_tz_data},
   models::{Geo, GeoTimeInfo, LocationInfo, PcZone, PlaceRow, SimplePlace},
   simple_iso::timestamp_from_string,
   store::{
@@ -260,7 +260,7 @@ pub async fn get_geo_data(extract::State(client): extract::State<Client>, query:
         }
       }
     }
-    if let Some(geo_item) = geo_data {
+    if let Some(geo_item) = geo_data.clone() {
       places = geo_item.to_places();
       states = geo_item.to_states();
       is_near_pop_land = geo_item.is_near_populated_land();
@@ -311,6 +311,11 @@ pub async fn get_geo_data(extract::State(client): extract::State<Client>, query:
             }
           }
         }
+      }
+    }
+    if rows.len() < 1 {
+      if let Some(geo) = geo_data.as_ref() {
+        rows = build_pc_zones_from_geo_info(&geo.clone());
       }
     }
     let (weather, _weather_cached) = fetch_weather_cached(geo).await;

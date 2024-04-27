@@ -1,11 +1,11 @@
 use std::fs::read_to_string;
 use axum::{http::StatusCode, response::IntoResponse};
 use serde::Deserialize;
-use serde_json::{json, Value};
 use serde_with::skip_serializing_none;
 use simple_string_patterns::*;
 use string_patterns::PatternMatch;
 use crate::models::Geo;
+use crate::simple_iso::*;
 
 pub fn get_db_name() -> String {
   dotenv::var("MONGO_DB_NAME").unwrap_or("none".to_string())
@@ -141,4 +141,11 @@ pub fn read_lines(filename: &str) -> Vec<String> {
     }
   }
   result
+}
+
+
+
+pub fn now_datetime_string() -> String {
+  let lt = chrono::offset::Local::now();
+  lt.to_simple_iso()
 }

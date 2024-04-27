@@ -8,6 +8,7 @@ use serde_json::*;
 use bson::{doc, Document};
 use string_patterns::PatternReplace;
 use crate::common::natural_tz_offset_from_utc;
+use crate::common::now_datetime_string;
 use crate::extractors::*;
 use crate::bson_extractors::*;
 use crate::simple_iso::*;
@@ -475,8 +476,7 @@ impl PcZone {
     let cy = extract_string_from_value_map(&row, "adminName1");
     let d = extract_string_from_value_map(&row, "adminName2");
     let w = extract_string_from_value_map(&row, "adminName3");
-    let lt = chrono::offset::Local::now();
-    let  modified_at = lt.to_simple_iso();
+    let modified_at = now_datetime_string();
     let addresses:Vec<String> = vec![];
     PcZone { 
         pc,
@@ -498,6 +498,32 @@ impl PcZone {
         modified_at,
         pn: Some(place_name)
     }
+  }
+
+  pub fn from_geo_nearby(geo: &GeoNearby) -> Self {
+    let pc = "N/A".to_string();
+    let addresses:Vec<String> = vec![];
+    let modified_at = now_datetime_string();
+    PcZone { 
+      pc,
+      addresses,
+      lat: geo.lat,
+      lng: geo.lng,
+      alt: 20.0,
+      n: 0.0,
+      e: 0.0,
+      c: geo.country_name.clone(),
+      d: geo.admin_name.clone(),
+      lc: geo.name.clone(),
+      cy: geo.region.clone(),
+      w: "".to_string(),
+      cs: "".to_string(),
+      wc: "".to_string(),
+      gr: "".to_string(),
+      dist: 0.0,
+      modified_at,
+      pn: Some(geo.name.clone())
+  }
   }
 
   pub fn has_addresses(&self) -> bool {

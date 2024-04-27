@@ -1,6 +1,6 @@
 use serde_json::{Error, Map, Value};
 use mongodb::Client;
-use crate::{common::{get_gtz_url, is_valid_zone_name}, fetchers::get_nearest_pc_info, models::{Geo, GeoNearby, GeoTimeInfo, PlaceRow, TzRow}};
+use crate::{common::{get_gtz_url, is_valid_zone_name}, fetchers::get_nearest_pc_info, models::{Geo, GeoNearby, GeoTimeInfo, PcZone, PlaceRow, TzRow}};
 
 pub async fn get_geotz_data(client: &Client, geo: Geo, date_opt: Option<&str>) -> Option<GeoTimeInfo> {
   let req_client = reqwest::Client::new();
@@ -37,6 +37,11 @@ pub async fn get_geotz_data(client: &Client, geo: Geo, date_opt: Option<&str>) -
     }
   }
   None   
+}
+
+pub fn build_pc_zones_from_geo_info(geo: &GeoNearby) -> Vec<PcZone> {
+  let pc_zone = PcZone::from_geo_nearby(geo);
+  vec![pc_zone]
 }
 
 pub async fn get_tz_data(geo_opt: Option<Geo>, zn_opt: Option<&str>, date_opt: Option<&str>) -> Option<TzRow> {
