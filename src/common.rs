@@ -65,6 +65,7 @@ pub struct GeoParams {
   pub search: Option<String>,
   pub place: Option<String>,
   pub dt: Option<String>,
+  pub pc: Option<String>,
   pub km: Option<f64>,
   pub skip: Option<u32>,
   pub limit: Option<u32>,

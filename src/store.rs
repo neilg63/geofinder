@@ -80,13 +80,13 @@ pub fn redis_get_poi(key: &str) -> Option<Vec<PlaceOfInterest>> {
   redis_get_data::<Vec<PlaceOfInterest>>(key)
 }
 
-pub fn  redis_set_postcodes(key: &str, data: &Vec<PcZone>) -> bool {
+pub fn  redis_set_postcode(key: &str, data: &PcZone) -> bool {
   let expiry = 31 * 24 * 60 * 60;
-  redis_set_data::<Vec<PcZone>>(key, data, expiry)
+  redis_set_data::<PcZone>(key, data, expiry)
 }
 
-pub fn redis_get_postcodes(key: &str) -> Option<Vec<PcZone>> {
-  redis_get_data::<Vec<PcZone>>(key)
+pub fn redis_get_postcode(key: &str) -> Option<PcZone> {
+  redis_get_data::<PcZone>(key)
 }
 
 pub fn  redis_set_wiki_summaries(key: &str, data: &Vec<WikipediaSummary>) -> bool {

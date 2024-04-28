@@ -50,7 +50,8 @@ use crate::handlers::{
     get_geo_data,
     show_astro_data,
     show_place_lookup,
-    show_timezone
+    show_timezone,
+    get_geo_data_by_pc
 };
 
 use crate::db::*;
@@ -84,6 +85,7 @@ async fn main() {
         .route("/geo-codes", post(get_geo_data))
         .route("/astro", get(show_astro_data))
         .route("/lookup", get(show_place_lookup))
+        .route("/pc-match", post(get_geo_data_by_pc))
         // .route("/pc-updates", get(read_pc_zone_updates))
         // .layer(CorsLayer::permissive()) // handle in nginx
         // timeout requests after 10 secs, returning 408 status code

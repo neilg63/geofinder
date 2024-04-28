@@ -404,10 +404,10 @@ impl GeoTimeInfo {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PcZone {
   pub pc: String,
-  addresses: Vec<String>,
-  lat: f64,
-  lng: f64,
-  alt: f64,
+  pub addresses: Vec<String>,
+  pub lat: f64,
+  pub lng: f64,
+  pub alt: f64,
   n: f64,
   e: f64,
   c: String,
@@ -415,14 +415,14 @@ pub struct PcZone {
   d: String,
   wc: String,
   cs: String,
-  lc: String,
+  pub lc: String,
   w: String,
   gr: String,
   #[serde(rename="modifiedAt")]
   modified_at: String,
   dist: f64,
   #[serde(skip_serializing_if = "Option::is_none")]
-  pn: Option<String>,
+  pub pn: Option<String>,
 }
 
 impl PcZone {
@@ -822,10 +822,6 @@ impl LocationInfo {
       cached: false
     }
 
-  }
-
-  pub fn set_cached(&mut self) {
-    self.cached = true;
   }
 }
 

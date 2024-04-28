@@ -2,9 +2,9 @@ use mongodb::{
     bson::{doc, Document}, options::{AggregateOptions, FindOptions}, Client, Collection
 };
 use futures::stream::StreamExt;
-// use simple_string_patterns::ToSegments;
+use string_patterns::*;
 
-use crate::{common::{build_store_key_from_geo, get_db_name}, models::{Geo, PcInfo, PcRow, PcZone}, store::{redis_get_pc_results, redis_set_pc_results}};
+use crate::{common::{build_store_key_from_geo, get_db_name}, models::{Geo, PcInfo, PcRow, PcZone}, store::{redis_get_pc_results, redis_get_postcode, redis_set_pc_results, redis_set_postcode}};
 
 pub async fn find_records(client: &Client, coll_name: &str, limit: u64, skip: u64, filter_options: Option<Document>, fields: Option<Vec<&str>>) -> Vec<Document> {
   let db_name = get_db_name();
@@ -140,9 +140,44 @@ pub async fn fetch_pcs(client: &Client, geo: Geo, km: f64, limit: u32) -> Vec<Pc
   }
 }
 
-pub async fn fetch_pc_zones(client: &Client, geo: Geo, km: f64, limit: u32) -> Vec<PcZone> {
-  let geo_search = build_geo_search(geo, km);
+pub async fn match_pc_zone(client: &Client, pc_str: &str) -> Option<PcZone> {
+  let pc = pc_str.trim().to_uppercase().pattern_replace_cs("\\s+", " ");
+  let cache_key = format!("pc_zone_{}", pc);
+  if let Some(pc_zone) = redis_get_postcode(&cache_key) {
+    return Some(pc_zone);
+  } else {
+    let rgx_str = format!("^\\s*{}\\s*$", pc.pattern_replace_cs("\\s+", "\\s+"));
+    let filter_options = Some(doc! { "pc": { "$regex": rgx_str }} );
+    if let Some(data) = fetch_record(client, "zones", filter_options).await {
+      let pc_zone = PcZone::new(&data);
+      redis_set_postcode(&cache_key, &pc_zone);
+      return Some(pc_zone);
+    }
+  }
+  None
+}
+
+/* pub async fn find_nearby_pcs(client: &Client, pc_str: &str, limit: u32) -> Vec<PcZone> {
+  let mut rows: Vec<PcZone> = Vec::new();
+  if let Some(pc_zone) = match_pc_zone(client, pc_str).await {
+    let geo = Geo::new(pc_zone.lat, pc_zone.lng, 20.0);
+    rows.push(pc_zone.clone());
+    if limit > 1 {
+      let others = fetch_pc_zones(client, geo, 5.0, limit - 1, Some(&pc_zone.pc) ).await;
+      for row in others {
+        rows.push(row);
+      }
+    }
+  }
+  rows
+} */
+
+pub async fn fetch_pc_zones(client: &Client, geo: Geo, km: f64, limit: u32, exclude_pc: Option<&str>) -> Vec<PcZone> {
+  let geo_search = build_geo_search(geo, km); 
   let mut pipeline = vec![geo_search];
+  if let Some(pc) =  exclude_pc {
+    pipeline.push(doc !{ "$match": { "pc": {"$ne": pc } } });
+  }
   let projection = doc! {
     "_id": 0,
     "lat": 1,

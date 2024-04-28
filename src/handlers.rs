@@ -12,13 +12,13 @@ use string_patterns::PatternReplace;
 use crate::{
   addresses::get_remote_addresses, astro::{self, get_astro_data_cached},
   common::{build_store_key_from_geo, is_valid_date_string, GeoParams, PostParams},
-  fetchers::{fetch_pc_zone, fetch_pc_zones, fetch_pcs, update_pc_addresses},
+  fetchers::{fetch_pc_zone, fetch_pc_zones, fetch_pcs, match_pc_zone, update_pc_addresses},
   geonames::{fetch_poi_cached, fetch_postcodes, fetch_weather_cached, fetch_wiki_entries_cached},
   geotime::{build_pc_zones_from_geo_info, get_geotz_data, get_place_lookup, get_tz_data},
   models::{Geo, GeoTimeInfo, LocationInfo, PcZone, PlaceRow, SimplePlace},
   simple_iso::timestamp_from_string,
   store::{
-    redis_addresses_have_been_checked, redis_data_have_been_checked, redis_get_geo_nearby, redis_get_pc_results, redis_get_pc_zones, redis_get_place_rows, redis_get_timezone, redis_set_astro_data, redis_set_data_checked, redis_set_geo_nearby, redis_set_pc_results, redis_set_pc_zones, redis_set_place_rows, redis_set_timezone
+    redis_addresses_have_been_checked, redis_data_have_been_checked, redis_get_geo_nearby, redis_get_pc_results, redis_get_pc_zones, redis_get_place_rows, redis_get_timezone, redis_set_data_checked, redis_set_geo_nearby, redis_set_pc_results, redis_set_pc_zones, redis_set_place_rows, redis_set_timezone
   }
 };
 
@@ -154,7 +154,7 @@ pub async fn fetch_and_update_addresses(extract::State(client): extract::State<C
     let lng = query.lng.unwrap_or(0.0);
     if lat > 49.0 && lng < 1.8 && lng > -10.0 {
       let geo = Geo::simple(lat, lng);
-      let mut rows = fetch_pc_zones(&client, geo, km, limit).await;
+      let mut rows = fetch_pc_zones(&client, geo, km, limit, None).await;
       let mut updated = 0;
       let mut counter = 0;
       for pc_zone in rows.iter_mut() {
@@ -242,9 +242,8 @@ pub async fn get_nearby_wiki_summaries(query: extract::Query<GeoParams>) -> impl
   (status, Json(response))
 }
 
-pub async fn get_geo_data(extract::State(client): extract::State<Client>, query: extract::Json<PostParams>) -> impl IntoResponse {
-  if let Some(lat) = query.lat {
-    let geo = Geo::new(lat, query.lng.unwrap_or(0.0), 10.0);
+pub async fn build_location_info(client: &Client, lat: f64, lng: f64) -> LocationInfo {
+    let geo = Geo::new(lat, lng, 20.0);
     let ck = build_store_key_from_geo("place", geo, None, None, 5);
     let mut pn = "".to_string();
     let mut geo_data = redis_get_geo_nearby(&ck);
@@ -276,7 +275,7 @@ pub async fn get_geo_data(extract::State(client): extract::State<Client>, query:
     let mut pc_cache_set = false;
     if rows.len() < 1 {
       if is_uk {
-        rows = fetch_pc_zones(&client, geo, km, limit).await;
+        rows = fetch_pc_zones(&client, geo, km, limit, None).await;
         if rows.len() > 0 {
           redis_set_pc_zones(&ck, &rows);
         }
@@ -326,9 +325,27 @@ pub async fn get_geo_data(extract::State(client): extract::State<Client>, query:
     if is_uk && rows.len() > 0 {
       rows = rows.iter_mut().map(|row| row.clean_addresses()).collect();
     }
-    let result = LocationInfo::new(rows, places, states, weather, poi, wikipedia);
+    LocationInfo::new(rows, places, states, weather, poi, wikipedia)
+}
+
+pub async fn get_geo_data(extract::State(client): extract::State<Client>, query: extract::Json<PostParams>) -> impl IntoResponse {
+  if let Some(lat) = query.lat {
+    let lng = query.lng.unwrap_or(0.0);
+    let result = build_location_info(&client, lat, lng).await;
     let response = json!(result);
     return (StatusCode::OK, Json(response));
+  }
+  let response = json!({ "valid": false });
+  (StatusCode::NOT_ACCEPTABLE, Json(response))
+}
+
+pub async fn get_geo_data_by_pc(extract::State(client): extract::State<Client>, query: extract::Json<PostParams>) -> impl IntoResponse {
+  if let Some(pc) = query.pc.clone() {
+    if let Some(pc_zone) = match_pc_zone(&client, &pc).await {
+      let result = build_location_info(&client, pc_zone.lat, pc_zone.lng).await;
+      let response = json!(result);
+      return (StatusCode::OK, Json(response));
+    }
   }
   let response = json!({ "valid": false });
   (StatusCode::NOT_ACCEPTABLE, Json(response))
