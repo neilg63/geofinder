@@ -91,7 +91,7 @@ async fn main() {
         // timeout requests after 10 secs, returning 408 status code
         .layer(TimeoutLayer::new(Duration::from_secs(15)))
         // don't allow request bodies larger than 1024 bytes, returning 413 status code
-        .layer(RequestBodyLimitLayer::new(1024))
+        .layer(RequestBodyLimitLayer::new(2048))
         .layer(TraceLayer::new_for_http())
         .layer(SetResponseHeaderLayer::if_not_present(
             header::SERVER,
